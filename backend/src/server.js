@@ -605,9 +605,22 @@ app.post('/api/public/registrations', async (req, res) => {
     return res.status(400).json({ message: 'Selected event is not active' });
   }
 
+  // Prevent duplicate registration (same email + same event)
+  const existing = await registrationsCollection.findOne({
+    email: payload.email.toLowerCase(),
+    eventId: payload.eventId,
+  });
+  if (existing) {
+    return res.status(409).json({
+      message: 'You have already registered for this event.',
+      registrationId: existing.id,
+    });
+  }
+
   const registration = {
     id: makeId(),
     ...payload,
+    email: payload.email.toLowerCase(),
     eventTitle: activeEvent.title || '',
     eventDate: activeEvent.date || '',
     eventLocation: activeEvent.location || '',
