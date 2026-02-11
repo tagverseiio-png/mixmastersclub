@@ -115,24 +115,27 @@ const HomeView = ({ navigateTo, mainEvent, judges = [], sponsors = [], settings 
             <div className="container mx-auto px-4 sm:px-6 relative z-20 flex flex-col items-center">
                 <FadeIn delay={200}>
                     <div className="flex flex-col items-center mb-8">
-                        <img src={Logo} alt="MMC Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain mb-6 opacity-90" />
-                        <span className="font-['Montserrat'] text-[10px] text-gray-400 tracking-[0.25em] md:tracking-[0.5em] uppercase text-center">
-                            The Inaugural Edition
-                        </span>
+                        <img
+                            src={Logo}
+                            alt="MMC Logo"
+                            className="w-28 h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 object-contain mb-4 opacity-90"
+                        />
+                        <span className="font-['Cinzel'] text-[#C5A059] text-xl md:text-2xl tracking-[0.3em]">2026</span>
                     </div>
                 </FadeIn>
 
                 <FadeIn delay={500}>
                     <h1 className="text-center mb-10 relative">
-                        <span className="block font-['Cinzel'] text-5xl sm:text-7xl md:text-9xl lg:text-[11rem] text-white tracking-[0.03em] md:tracking-[0.05em] font-medium leading-[0.9] mix-blend-overlay">MIX</span>
-                        <span className="block font-['Cinzel'] text-5xl sm:text-7xl md:text-9xl lg:text-[11rem] text-transparent bg-clip-text bg-gradient-to-b from-[#C5A059] via-[#E5C580] to-[#8a701e] tracking-[0.03em] md:tracking-[0.05em] font-normal leading-[0.9]">MASTERS</span>
+                        <span className="block font-['Cinzel'] text-3xl sm:text-5xl md:text-7xl lg:text-8xl text-transparent bg-clip-text bg-gradient-to-b from-[#C5A059] via-[#E5C580] to-[#8a701e] tracking-[0.03em] md:tracking-[0.05em] font-normal leading-[0.95]">
+                            MixMasters Club
+                        </span>
                     </h1>
                 </FadeIn>
 
                 <FadeIn delay={800}>
                     <div className="flex flex-col items-center mb-14 md:mb-20">
                         <div className="h-px w-12 bg-[#C5A059]/40 mb-6" />
-                        <p className="font-['Montserrat'] text-xs sm:text-sm md:text-base text-gray-400 uppercase tracking-[0.4em] md:tracking-[0.6em] text-center font-light">
+                        <p className="font-['Montserrat'] text-xs sm:text-sm md:text-base text-gray-400 uppercase tracking-[0.35em] md:tracking-[0.5em] text-center font-light leading-relaxed">
                             International Tamil DJ Battle
                         </p>
                         <div className="h-px w-12 bg-[#C5A059]/40 mt-6" />
@@ -141,7 +144,7 @@ const HomeView = ({ navigateTo, mainEvent, judges = [], sponsors = [], settings 
 
                 <FadeIn delay={1100}>
                     <div className="flex flex-col md:flex-row gap-8 items-center">
-                        <Button variant="gold" onClick={() => navigateTo('register', 'artist')}>Artist Application</Button>
+                        <Button variant="gold" onClick={() => navigateTo('register', 'artist')}>DJ Registration</Button>
                     </div>
                 </FadeIn>
             </div>

@@ -460,18 +460,19 @@ async function sendEmail(options) {
 }
 
 function buildParticipantHtml(registration) {
+  const eventDisplayName = 'MixMasters Club – International Tamil DJ Battle';
   return `
     <!DOCTYPE html>
     <html>
     <head>
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Registration Confirmed - Mix Masters</title>
+      <title>Registration Confirmed - MixMasters Club</title>
     </head>
     <body style="background-color: #050505; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #ffffff; margin: 0; padding: 0;">
       <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #0a0a0a; border: 1px solid #1a1a1a;">
         <tr>
           <td style="padding: 40px; text-align: center; border-bottom: 1px solid #1a1a1a;">
-            <h1 style="color: #C5A059; font-size: 28px; letter-spacing: 2px; margin: 0; text-transform: uppercase;">Mix Masters</h1>
+            <h1 style="color: #C5A059; font-size: 28px; letter-spacing: 2px; margin: 0; text-transform: uppercase;">MixMasters Club</h1>
             <p style="color: #666; font-size: 10px; letter-spacing: 4px; margin-top: 10px; text-transform: uppercase;">International Tamil DJ Battle</p>
           </td>
         </tr>
@@ -479,7 +480,7 @@ function buildParticipantHtml(registration) {
           <td style="padding: 40px;">
             <h2 style="font-size: 20px; color: #ffffff; margin-bottom: 20px;">Entry Confirmed, ${registration.fullName}.</h2>
             <p style="color: #aaaaaa; line-height: 1.6; margin-bottom: 30px;">
-              Your application for the <strong>${registration.eventTitle}</strong> has been received. Our council is currently reviewing your showcase.
+              Your application for the <strong>${eventDisplayName}</strong> has been received. Our council is currently reviewing your showcase.
             </p>
             
             <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0f0f0f; border: 1px solid #1a1a1a; margin-bottom: 30px;">
@@ -540,7 +541,7 @@ async function sendRegistrationEmail(registration) {
     // 1. Send confirmation to participant
     await sendEmail({
       to: registration.email,
-      subject: `[Mix Masters] Entry Confirmed - ${registration.eventTitle}`,
+      subject: `[MixMasters Club – International Tamil DJ Battle] Entry Confirmed - ${registration.eventTitle}`,
       html: buildParticipantHtml(registration),
     });
 
@@ -548,7 +549,7 @@ async function sendRegistrationEmail(registration) {
     for (const adminEmail of ADMIN_EMAILS) {
       await sendEmail({
         to: adminEmail,
-        subject: `[NEW REGISTRATION] ${registration.stageName || registration.fullName} - ${registration.eventTitle}`,
+        subject: `[NEW REGISTRATION] ${registration.stageName || registration.fullName} - MixMasters Club – International Tamil DJ Battle`,
         html: buildAdminHtml(registration),
       });
     }

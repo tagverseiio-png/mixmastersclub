@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Menu, X, Instagram, Twitter, Youtube, Crown } from 'lucide-react';
+import { Menu, X, Instagram, Twitter, Youtube } from 'lucide-react';
 import Button from './components/ui/Button';
 import Logo from './assets/Icon.svg';
 
@@ -326,7 +326,7 @@ export default function App() {
       <nav className={`fixed top-0 w-full z-[60] transition-all duration-1000 ease-in-out ${scrolled ? 'bg-[#050505]/95 backdrop-blur-xl border-b border-white/5 py-3 md:py-4' : 'bg-transparent py-4 md:py-10'}`}>
         <div className="container mx-auto px-4 sm:px-6 md:px-12 flex justify-between items-center gap-3">
           <div className="flex items-center gap-4 cursor-pointer group" onClick={() => navigateTo('home')}>
-            <Crown size={28} strokeWidth={1.5} className="text-[#C5A059] transition-transform duration-700 group-hover:scale-110" />
+            <img src={Logo} alt="MMC Logo" className="w-9 h-9 md:w-10 md:h-10 object-contain opacity-90 transition-transform duration-700 group-hover:scale-110" />
           </div>
 
           <div ref={navDropdownRef} className="hidden md:block">
