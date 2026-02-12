@@ -215,9 +215,14 @@ const SEED_GALLERY = [
 
 const app = express();
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const FALLBACK_PROD_ORIGINS = [
+  'https://mixmasters.club',
+  'https://www.mixmasters.club',
+];
 const allowedOrigins = [
   CORS_ORIGIN,
   ...CORS_ORIGIN_LIST,
+  ...(IS_PRODUCTION ? FALLBACK_PROD_ORIGINS : []),
 ].filter(Boolean);
 const normalizeOrigin = (origin) => {
   if (!origin) return '';
@@ -232,6 +237,22 @@ const isDevTunnelOrigin = (origin) => {
     return false;
   }
 };
+const isMixMastersOrigin = (origin) => {
+  if (!origin) return false;
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== 'https:') return false;
+    return hostname === 'mixmasters.club' || hostname.endsWith('.mixmasters.club');
+  } catch {
+    return false;
+  }
+};
+const isAllowedOrigin = (origin) => {
+  if (!origin) return false;
+  const normalizedIncoming = normalizeOrigin(origin);
+  const allowedMatch = allowedOrigins.some((allowed) => normalizeOrigin(allowed) === normalizedIncoming);
+  return allowedMatch || isMixMastersOrigin(origin);
+};
 
 app.use(
   cors({
@@ -241,17 +262,15 @@ app.use(
         return callback(null, true);
       }
 
-      const normalizedIncoming = normalizeOrigin(incomingOrigin);
-      const allowedMatch = allowedOrigins.some((allowed) => normalizeOrigin(allowed) === normalizedIncoming);
-
-      if (allowedMatch || isDevTunnelOrigin(incomingOrigin)) {
-        return callback(null, incomingOrigin);
+      if (isAllowedOrigin(incomingOrigin) || isDevTunnelOrigin(incomingOrigin)) {
+        return callback(null, true);
       }
 
       console.error(`CORS Blocked: ${incomingOrigin}`);
       callback(new Error('CORS not allowed'), false);
     },
     credentials: true,
+    optionsSuccessStatus: 204,
   })
 );
 app.use(express.json({ limit: '10mb' }));
