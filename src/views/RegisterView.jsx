@@ -93,9 +93,10 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
             return;
         }
 
-        const body = new FormData();
-        body.append('media', file);
-
+        const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+        const chunks = Math.ceil(file.size / CHUNK_SIZE);
+        const isLargeFile = file.size > 50 * 1024 * 1024; // Use chunked upload for files > 50MB
+        
         setIsUploading(true);
         setUploadError('');
         setUploadSuccess(false);
@@ -110,75 +111,133 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
         const startTime = Date.now();
         let uploadInterval;
 
-        return new Promise((resolve) => {
-            const xhr = new XMLHttpRequest();
+        uploadInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            setUploadMetrics(prev => ({ ...prev, elapsedTime: elapsed }));
+        }, 100);
 
-            // Track elapsed time
-            uploadInterval = setInterval(() => {
-                const elapsed = Date.now() - startTime;
-                setUploadMetrics(prev => ({ ...prev, elapsedTime: elapsed }));
-            }, 100);
+        try {
+            if (isLargeFile && chunks > 1) {
+                // Chunked upload for large files
+                const uploadId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+                let uploadedSize = 0;
 
-            // Track upload progress
-            xhr.upload.addEventListener('progress', (e) => {
-                if (e.lengthComputable) {
+                for (let i = 0; i < chunks; i++) {
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(start + CHUNK_SIZE, file.size);
+                    const chunk = file.slice(start, end);
+
+                    const chunkForm = new FormData();
+                    chunkForm.append('chunk', chunk);
+                    chunkForm.append('uploadId', uploadId);
+                    chunkForm.append('chunkIndex', i);
+                    chunkForm.append('totalChunks', chunks);
+                    chunkForm.append('fileName', file.name);
+                    chunkForm.append('fileSize', file.size);
+                    chunkForm.append('mimeType', file.type);
+
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min per chunk
+
+                    const response = await fetch(`${apiRoot}/public/registrations/upload-chunk`, {
+                        method: 'POST',
+                        body: chunkForm,
+                        signal: controller.signal,
+                    });
+
+                    clearTimeout(timeoutId);
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({
+                            message: `Chunk ${i + 1}/${chunks} upload failed`,
+                        }));
+                        throw new Error(errorData?.message || `Chunk ${i + 1} failed`);
+                    }
+
+                    uploadedSize = end;
                     setUploadMetrics(prev => ({
                         ...prev,
-                        uploadedSize: e.loaded,
-                        fileSize: e.total,
+                        uploadedSize,
                     }));
                 }
-            });
 
-            xhr.addEventListener('load', () => {
-                clearInterval(uploadInterval);
-                const serverTime = Date.now() - startTime;
+                // Finalize upload
+                const finalResponse = await fetch(`${apiRoot}/public/registrations/upload-finalize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        uploadId,
+                        fileName: file.name,
+                        fileSize: file.size,
+                        mimeType: file.type,
+                        totalChunks: chunks,
+                    }),
+                });
 
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    try {
-                        const payload = JSON.parse(xhr.responseText);
-                        setFormData(prev => ({
-                            ...prev,
-                            demoFileName: payload.fileName || file.name,
-                            demoFileUrl: payload.url || '',
-                            demoFileSize: payload.size || 0,
-                            demoFileMime: payload.mimeType || file.type || '',
-                        }));
-                        setUploadMetrics(prev => ({ ...prev, serverTime }));
-                        setUploadSuccess(true);
-                        setTimeout(() => setUploadSuccess(false), 3000);
-                    } catch (error) {
-                        setUploadError('Failed to parse server response.');
-                    }
-                } else {
-                    try {
-                        const payload = JSON.parse(xhr.responseText);
-                        setUploadError(payload?.message || `Upload failed with status ${xhr.status}`);
-                    } catch {
-                        setUploadError(`Upload failed with status ${xhr.status}`);
-                    }
+                if (!finalResponse.ok) {
+                    throw new Error('Failed to finalize upload');
                 }
-                setIsUploading(false);
-                resolve();
-            });
 
-            xhr.addEventListener('error', () => {
-                clearInterval(uploadInterval);
-                setUploadError('Network error occurred during upload. Please try again.');
-                setIsUploading(false);
-                resolve();
-            });
+                const payload = await finalResponse.json();
+                setFormData(prev => ({
+                    ...prev,
+                    demoFileName: payload.fileName || file.name,
+                    demoFileUrl: payload.url || '',
+                    demoFileSize: payload.size || 0,
+                    demoFileMime: payload.mimeType || file.type || '',
+                }));
+            } else {
+                // Single upload for smaller files (faster)
+                const body = new FormData();
+                body.append('media', file);
 
-            xhr.addEventListener('abort', () => {
-                clearInterval(uploadInterval);
-                setUploadError('Upload was cancelled.');
-                setIsUploading(false);
-                resolve();
-            });
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min
 
-            xhr.open('POST', `${apiRoot}/public/registrations/upload`);
-            xhr.send(body);
-        });
+                const response = await fetch(`${apiRoot}/public/registrations/upload`, {
+                    method: 'POST',
+                    body,
+                    signal: controller.signal,
+                    headers: {},
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({
+                        message: `Upload failed with status ${response.status}`,
+                    }));
+                    throw new Error(errorData?.message || `Upload failed with status ${response.status}`);
+                }
+
+                const payload = await response.json();
+                setFormData(prev => ({
+                    ...prev,
+                    demoFileName: payload.fileName || file.name,
+                    demoFileUrl: payload.url || '',
+                    demoFileSize: payload.size || 0,
+                    demoFileMime: payload.mimeType || file.type || '',
+                }));
+            }
+
+            clearInterval(uploadInterval);
+            const serverTime = Date.now() - startTime;
+            setUploadMetrics(prev => ({ ...prev, serverTime }));
+            setUploadSuccess(true);
+            setTimeout(() => setUploadSuccess(false), 3000);
+            setIsUploading(false);
+        } catch (error) {
+            clearInterval(uploadInterval);
+            setIsUploading(false);
+
+            if (error.name === 'AbortError') {
+                setUploadError('Upload timeout. Please try again with a smaller file or better connection.');
+            } else if (error instanceof TypeError) {
+                setUploadError('Network error occurred. Please check your connection and try again.');
+            } else {
+                setUploadError(error?.message || 'Upload failed. Please try again.');
+            }
+        }
     };
 
     const handleFileUpload = (e) => {
@@ -189,21 +248,8 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
             return;
         }
 
-        if (file.type.startsWith('video/')) {
-            const video = document.createElement('video');
-            video.preload = 'metadata';
-            video.onloadedmetadata = () => {
-                window.URL.revokeObjectURL(video.src);
-                if (video.duration > 600) {
-                    setUploadError('Video duration exceeds 10 minutes limit.');
-                    return;
-                }
-                uploadDemoFile(file);
-            };
-            video.src = URL.createObjectURL(file);
-            return;
-        }
-
+        // Skip duration check for videos - validate on backend instead
+        // This prevents blocking on large files
         uploadDemoFile(file);
     };
 
@@ -497,6 +543,15 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                                                         {uploadMetrics.fileSize > 0 
                                                             ? `${Math.round((uploadMetrics.uploadedSize / uploadMetrics.fileSize) * 100)}%`
                                                             : '0%'
+                                                        }
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
+                                                    <span>Speed:</span>
+                                                    <span className="text-white">
+                                                        {uploadMetrics.elapsedTime > 0
+                                                            ? `${((uploadMetrics.uploadedSize / 1024 / 1024) / (uploadMetrics.elapsedTime / 1000)).toFixed(1)} Mbps`
+                                                            : '-'
                                                         }
                                                     </span>
                                                 </div>

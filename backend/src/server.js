@@ -18,6 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
+const CHUNKS_DIR = path.join(UPLOADS_DIR, 'chunks');
 
 const PORT = Number(process.env.PORT || 4000);
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -254,6 +255,15 @@ app.use(
   })
 );
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb' }));
+
+// Set request timeout to 5 minutes for large file uploads
+app.use((req, res, next) => {
+  req.setTimeout(300000); // 5 minutes
+  res.setTimeout(300000); // 5 minutes
+  next();
+});
+
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 const storage = multer.diskStorage({
@@ -293,6 +303,13 @@ const registrationUpload = multer({
     cb(null, true);
   },
 });
+const chunkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: (_req, _file, cb) => cb(null, true),
+});
+
+const getChunkPath = (uploadId, chunkIndex) => path.join(CHUNKS_DIR, `${uploadId}-${chunkIndex}`);
 
 const client = new MongoClient(MONGO_URI, {
   maxPoolSize: 10,
@@ -336,6 +353,7 @@ function sanitizeContent(payload) {
 
 async function ensureLocalStorageDir() {
   await fs.mkdir(UPLOADS_DIR, { recursive: true });
+  await fs.mkdir(CHUNKS_DIR, { recursive: true });
 }
 
 async function ensureContentDoc() {
@@ -686,6 +704,58 @@ app.get('/api/public/content', async (_req, res) => {
   res.json(content);
 });
 
+app.post('/api/public/registrations/upload-chunk', chunkUpload.single('chunk'), async (req, res) => {
+  const { uploadId, chunkIndex } = req.body || {};
+  if (!req.file || !uploadId || Number.isNaN(Number(chunkIndex))) {
+    return res.status(400).json({ message: 'Missing upload chunk data' });
+  }
+
+  const chunkPath = getChunkPath(String(uploadId), Number(chunkIndex));
+  await fs.writeFile(chunkPath, req.file.buffer);
+  return res.status(201).json({ ok: true });
+});
+
+app.post('/api/public/registrations/upload-finalize', async (req, res) => {
+  const { uploadId, fileName, fileSize, mimeType, totalChunks } = req.body || {};
+  if (!uploadId || !fileName || !mimeType || !totalChunks) {
+    return res.status(400).json({ message: 'Missing upload metadata' });
+  }
+
+  const ext = path.extname(fileName || '').toLowerCase();
+  const total = Number(totalChunks);
+  if (!REGISTRATION_UPLOAD_EXTENSIONS.has(ext) || !REGISTRATION_UPLOAD_TYPES.has(mimeType)) {
+    return res.status(400).json({ message: 'Unsupported file type' });
+  }
+  if (!total || total < 1) {
+    return res.status(400).json({ message: 'Invalid chunk count' });
+  }
+
+  const finalName = `${Date.now()}-${crypto.randomUUID()}${ext}`;
+  const finalPath = path.join(UPLOADS_DIR, finalName);
+
+  for (let i = 0; i < total; i += 1) {
+    const chunkPath = getChunkPath(String(uploadId), i);
+    try {
+      const data = await fs.readFile(chunkPath);
+      await fs.appendFile(finalPath, data);
+      await fs.unlink(chunkPath);
+    } catch {
+      return res.status(400).json({ message: `Missing chunk ${i + 1} of ${total}` });
+    }
+  }
+
+  const stats = await fs.stat(finalPath);
+  const relativePath = `/uploads/${finalName}`;
+  const baseUrl = PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+  return res.status(201).json({
+    fileName,
+    mimeType,
+    size: stats.size || Number(fileSize) || 0,
+    path: relativePath,
+    url: `${baseUrl}${relativePath}`,
+  });
+});
+
 app.post('/api/public/registrations/upload', registrationUpload.single('media'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
@@ -958,7 +1028,11 @@ await ensureContentDoc();
 await ensureFaqSeed();
 await ensureSeedData();
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
   console.log(`MongoDB connected: ${MONGO_DB_NAME}`);
 });
+
+// Set server timeout to 5 minutes for large file uploads
+server.setTimeout(300000); // 5 minutes
+server.keepAliveTimeout = 300000;
