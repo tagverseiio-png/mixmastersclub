@@ -32,7 +32,7 @@ const MAIL_SERVICE_API_KEY = process.env.MAIL_SERVICE_API_KEY || '';
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@mixmasters.club,aathishpirate@gmail.com').split(',').map(e => e.trim());
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
 
-const RESOURCE_KEYS = new Set(['events', 'judges', 'sponsors', 'gallery', 'faq', 'formats']);
+const RESOURCE_KEYS = new Set(['events', 'judges', 'sponsors', 'gallery', 'faq']);
 const ALLOWED_UPLOAD_TYPES = new Set([
   'video/mp4',
   'video/webm',
@@ -51,6 +51,27 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set([
   '.png',
   '.webp',
   '.avif',
+]);
+const REGISTRATION_UPLOAD_TYPES = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/aac',
+  'audio/ogg',
+  'audio/webm',
+]);
+const REGISTRATION_UPLOAD_EXTENSIONS = new Set([
+  '.mp4',
+  '.webm',
+  '.mov',
+  '.mp3',
+  '.wav',
+  '.aac',
+  '.ogg',
 ]);
 
 const CONTENT_DOC_ID = 'site_content_v1';
@@ -111,7 +132,6 @@ const DEFAULT_CONTENT = {
   sponsors: [],
   gallery: [],
   faq: [],
-  formats: [],
   results: {
     heading: '',
     subtitle: '',
@@ -259,6 +279,20 @@ const upload = multer({
     cb(null, true);
   },
 });
+const registrationUpload = multer({
+  storage,
+  limits: { fileSize: 80 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const mimeAllowed = REGISTRATION_UPLOAD_TYPES.has(file.mimetype);
+    const extensionAllowed = REGISTRATION_UPLOAD_EXTENSIONS.has(ext);
+    if (!mimeAllowed && !extensionAllowed) {
+      cb(new Error(`Unsupported file type: ${file.mimetype}`));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 const client = new MongoClient(MONGO_URI, {
   maxPoolSize: 10,
@@ -290,7 +324,6 @@ function sanitizeContent(payload) {
     sponsors: Array.isArray(payload.sponsors) ? payload.sponsors : [],
     gallery: Array.isArray(payload.gallery) ? payload.gallery : [],
     faq: Array.isArray(payload.faq) ? payload.faq : [],
-    formats: Array.isArray(payload.formats) ? payload.formats : [],
     results: payload.results && typeof payload.results === 'object'
       ? {
         heading: payload.results.heading || '',
@@ -386,6 +419,61 @@ async function writeContent(data) {
   );
 }
 
+// Helper function to extract file paths from URLs that belong to our server
+function extractServerFilePath(url) {
+  if (!url || typeof url !== 'string') return null;
+  
+  // Check if this is a local upload URL (contains /uploads/)
+  if (url.includes('/uploads/')) {
+    const match = url.match(/\/uploads\/(.+)$/);
+    if (match && match[1]) {
+      return path.join(UPLOADS_DIR, match[1]);
+    }
+  }
+  return null;
+}
+
+// Helper function to safely delete a file from server storage
+async function deleteServerFile(url) {
+  const filePath = extractServerFilePath(url);
+  if (!filePath) return; // Not a server file, skip
+  
+  try {
+    await fs.unlink(filePath);
+    console.log(`Deleted file: ${filePath}`);
+  } catch (error) {
+    // File might not exist or already deleted, log but don't throw
+    console.warn(`Failed to delete file ${filePath}:`, error.message);
+  }
+}
+
+// Helper function to extract all media URLs from an object
+function extractMediaUrls(obj) {
+  if (!obj || typeof obj !== 'object') return [];
+  
+  const urls = [];
+  const mediaFields = [
+    'mediaUrl', 'image', 'posterUrl', 
+    'heroVideoUrl', 'heroPosterUrl', 'visionImageUrl', 
+    'aboutMediaUrl', 'aboutPosterUrl',
+    'demoFileUrl'
+  ];
+  
+  for (const field of mediaFields) {
+    if (obj[field] && typeof obj[field] === 'string') {
+      urls.push(obj[field]);
+    }
+  }
+  
+  return urls;
+}
+
+// Helper function to delete all media files associated with an object
+async function deleteAssociatedMedia(obj) {
+  const urls = extractMediaUrls(obj);
+  await Promise.all(urls.map(url => deleteServerFile(url)));
+}
+
 function authRequired(req, res, next) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
@@ -432,6 +520,10 @@ function sanitizeRegistrationPayload(payload) {
     experience: source.experience ? String(source.experience).trim() : '',
     soundCloud: source.soundCloud ? String(source.soundCloud).trim() : '',
     demoFile: source.demoFile ? String(source.demoFile).trim() : '',
+    demoFileUrl: source.demoFileUrl ? String(source.demoFileUrl).trim() : '',
+    demoFileSize: Number.isFinite(Number(source.demoFileSize)) ? Number(source.demoFileSize) : 0,
+    demoFileMime: source.demoFileMime ? String(source.demoFileMime).trim() : '',
+    cloudLink: source.cloudLink ? String(source.cloudLink).trim() : '',
     source: source.source ? String(source.source).trim() : 'website',
   };
 }
@@ -520,13 +612,15 @@ function buildAdminHtml(registration) {
           <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
           <table style="width: 100%; border-collapse: collapse;">
             <tr><td style="padding: 8px 0; color: #666;"><strong>Event:</strong></td><td>${registration.eventTitle}</td></tr>
-            <tr><td style="padding: 8px 0; color: #666;"><strong>Artist Name:</strong></td><td>${registration.stageName || 'N/A'} (${registration.fullName})</td></tr>
+            <tr><td style="padding: 8px 0; color: #666;"><strong>Artist Name:</strong></td><td>${registration.fullName}</td></tr>
             <tr><td style="padding: 8px 0; color: #666;"><strong>Email:</strong></td><td>${registration.email}</td></tr>
             <tr><td style="padding: 8px 0; color: #666;"><strong>Origin:</strong></td><td>${registration.city}, ${registration.nationality}</td></tr>
             <tr><td style="padding: 8px 0; color: #666;"><strong>Experience:</strong></td><td>${registration.experience} Years</td></tr>
             <tr><td style="padding: 8px 0; color: #666;"><strong>Instagram:</strong></td><td>${registration.instagram}</td></tr>
             <tr><td style="padding: 8px 0; color: #666;"><strong>Showcase:</strong></td><td>${registration.soundCloud || 'N/A'}</td></tr>
-            <tr><td style="padding: 8px 0; color: #666;"><strong>File:</strong></td><td>${registration.demoFile || 'N/A'}</td></tr>
+            <tr><td style="padding: 8px 0; color: #666;"><strong>Demo File:</strong></td><td>${registration.demoFile || 'N/A'}</td></tr>
+            <tr><td style="padding: 8px 0; color: #666;"><strong>Demo URL:</strong></td><td>${registration.demoFileUrl || 'N/A'}</td></tr>
+            <tr><td style="padding: 8px 0; color: #666;"><strong>Cloud Link:</strong></td><td>${registration.cloudLink || 'N/A'}</td></tr>
           </table>
           <p style="margin-top: 30px; font-size: 12px; color: #999;">Submitted at: ${registration.createdAt}</p>
         </div>
@@ -549,7 +643,7 @@ async function sendRegistrationEmail(registration) {
     for (const adminEmail of ADMIN_EMAILS) {
       await sendEmail({
         to: adminEmail,
-        subject: `[NEW REGISTRATION] ${registration.stageName || registration.fullName} - MixMasters Club – International Tamil DJ Battle`,
+        subject: `[NEW REGISTRATION] ${registration.fullName} - MixMasters Club – International Tamil DJ Battle`,
         html: buildAdminHtml(registration),
       });
     }
@@ -590,6 +684,22 @@ app.get('/api/public/content', async (_req, res) => {
   const content = await readContent();
   res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=600');
   res.json(content);
+});
+
+app.post('/api/public/registrations/upload', registrationUpload.single('media'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  const relativePath = `/uploads/${req.file.filename}`;
+  const baseUrl = PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+  return res.status(201).json({
+    fileName: req.file.originalname,
+    mimeType: req.file.mimetype,
+    size: req.file.size,
+    path: relativePath,
+    url: `${baseUrl}${relativePath}`,
+  });
 });
 
 app.post('/api/public/registrations', async (req, res) => {
@@ -660,6 +770,25 @@ app.get('/api/content', authRequired, async (_req, res) => {
 
 app.put('/api/content', authRequired, async (req, res) => {
   const payload = req.body || {};
+  const oldContent = await readContent();
+  
+  // Check if settings media URLs are being replaced and delete old files
+  if (payload.settings && oldContent.settings) {
+    const settingsMediaFields = [
+      'heroVideoUrl', 'heroPosterUrl', 'visionImageUrl', 
+      'aboutMediaUrl', 'aboutPosterUrl'
+    ];
+    
+    for (const field of settingsMediaFields) {
+      const oldUrl = oldContent.settings[field];
+      const newUrl = payload.settings[field];
+      if (newUrl && oldUrl && newUrl !== oldUrl) {
+        // New URL is different from old URL, delete old file
+        await deleteServerFile(oldUrl);
+      }
+    }
+  }
+  
   const nextData = sanitizeContent(payload);
   await writeContent(nextData);
   res.json({ message: 'Content updated', content: nextData });
@@ -707,10 +836,21 @@ app.get('/api/registrations', authRequired, async (_req, res) => {
 });
 
 app.delete('/api/registrations/:id', authRequired, async (req, res) => {
-  const result = await registrationsCollection.deleteOne({ id: String(req.params.id) });
-  if (!result.deletedCount) {
+  // First, find the registration to get the media URL
+  const registration = await registrationsCollection.findOne({ id: String(req.params.id) });
+  
+  if (!registration) {
     return res.status(404).json({ message: 'Registration not found' });
   }
+  
+  // Delete the registration from database
+  const result = await registrationsCollection.deleteOne({ id: String(req.params.id) });
+  
+  if (result.deletedCount) {
+    // Delete associated media files from server storage
+    await deleteAssociatedMedia(registration);
+  }
+  
   return res.status(204).send();
 });
 
@@ -751,7 +891,19 @@ app.put('/api/:resource/:id', authRequired, async (req, res) => {
     return res.status(404).json({ message: 'Record not found' });
   }
 
-  const updated = { ...list[index], ...(req.body || {}), id: list[index].id };
+  const oldItem = list[index];
+  const newItem = req.body || {};
+  
+  // Check if any media URLs are being replaced and delete old files
+  const mediaFields = ['mediaUrl', 'image', 'posterUrl'];
+  for (const field of mediaFields) {
+    if (newItem[field] && oldItem[field] && newItem[field] !== oldItem[field]) {
+      // New URL is different from old URL, delete old file
+      await deleteServerFile(oldItem[field]);
+    }
+  }
+
+  const updated = { ...oldItem, ...newItem, id: oldItem.id };
   list[index] = updated;
   content[resource] = list;
   await writeContent(content);
@@ -766,10 +918,16 @@ app.delete('/api/:resource/:id', authRequired, async (req, res) => {
 
   const content = await readContent();
   const list = content[resource] || [];
+  const itemToDelete = list.find((item) => String(item.id) === String(id));
   const next = list.filter((item) => String(item.id) !== String(id));
 
   if (next.length === list.length) {
     return res.status(404).json({ message: 'Record not found' });
+  }
+
+  // Delete associated media files from server storage
+  if (itemToDelete) {
+    await deleteAssociatedMedia(itemToDelete);
   }
 
   content[resource] = next;
