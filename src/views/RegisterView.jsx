@@ -121,32 +121,64 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                 const body = new FormData();
                 body.append('media', file);
 
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min
+                await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', `${apiRoot}/public/registrations/upload`);
+                    xhr.timeout = 300000; // 5 minutes
 
-                const response = await fetch(`${apiRoot}/public/registrations/upload`, {
-                    method: 'POST',
-                    body,
-                    signal: controller.signal,
+                    xhr.upload.addEventListener('progress', (e) => {
+                        if (e.lengthComputable) {
+                            setUploadMetrics(prev => ({
+                                ...prev,
+                                uploadedSize: e.loaded,
+                                fileSize: e.total,
+                            }));
+                        }
+                    });
+
+                    xhr.addEventListener('load', () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                const payload = JSON.parse(xhr.responseText);
+                                setFormData(prev => ({
+                                    ...prev,
+                                    demoFileName: payload.fileName || file.name,
+                                    demoFileUrl: payload.url || '',
+                                    demoFileSize: payload.size || 0,
+                                    demoFileMime: payload.mimeType || file.type || '',
+                                }));
+                                setUploadMetrics(prev => ({
+                                    ...prev,
+                                    uploadedSize: file.size,
+                                }));
+                                resolve();
+                            } catch (err) {
+                                reject(new Error('Failed to parse server response.'));
+                            }
+                        } else {
+                            try {
+                                const payload = JSON.parse(xhr.responseText);
+                                reject(new Error(payload?.message || `Upload failed with status ${xhr.status}`));
+                            } catch {
+                                reject(new Error(`Upload failed with status ${xhr.status}`));
+                            }
+                        }
+                    });
+
+                    xhr.addEventListener('error', () => {
+                        reject(new TypeError('Network error occurred. Please check your connection and try again.'));
+                    });
+
+                    xhr.addEventListener('timeout', () => {
+                        reject(new Error('Upload timeout. Please try again with a smaller file or better connection.'));
+                    });
+
+                    xhr.addEventListener('abort', () => {
+                        reject(new Error('Upload was cancelled.'));
+                    });
+
+                    xhr.send(body);
                 });
-
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({
-                        message: `Upload failed with status ${response.status}`,
-                    }));
-                    throw new Error(errorData?.message || `Upload failed with status ${response.status}`);
-                }
-
-                const payload = await response.json();
-                setFormData(prev => ({
-                    ...prev,
-                    demoFileName: payload.fileName || file.name,
-                    demoFileUrl: payload.url || '',
-                    demoFileSize: payload.size || 0,
-                    demoFileMime: payload.mimeType || file.type || '',
-                }));
             };
 
             const uploadChunkedFile = async () => {
