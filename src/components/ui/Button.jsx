@@ -6,7 +6,7 @@ const Button = ({ children, variant = 'primary', className = '', onClick }) => {
     const variants = {
         primary: "text-white border border-[#C5A059]/50 hover:border-[#C5A059]",
         secondary: "text-gray-500 hover:text-[#C5A059] border border-transparent",
-        gold: "bg-[#C5A059] text-black hover:bg-white transition-colors duration-500",
+        gold: "bg-[#C5A059] text-black hover:bg-[#E5C580] shadow-[0_0_18px_rgba(197,160,89,0.35)] hover:shadow-[0_0_28px_rgba(197,160,89,0.6)] transition-all duration-500",
     };
 
     return (

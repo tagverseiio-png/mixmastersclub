@@ -3,6 +3,7 @@ import FadeIn from '../components/ui/FadeIn';
 import Button from '../components/ui/Button';
 import SectionHeader from '../components/ui/SectionHeader';
 import Logo from '../assets/Icon.svg';
+import HeroIMage from '../assets/hero.svg';
 
 const HeroVideoLayer = ({ sources, poster, isCustomHero }) => {
     const [heroVideoIndex, setHeroVideoIndex] = useState(0);
@@ -114,20 +115,21 @@ const HomeView = ({ navigateTo, mainEvent, judges = [], sponsors = [], settings 
 
             <div className="container mx-auto px-4 sm:px-6 relative z-20 flex flex-col items-center">
                 <FadeIn delay={200}>
-                    <div className="flex flex-col items-center mb-8">
-                        <img
-                            src={Logo}
-                            alt="MMC Logo"
-                            className="w-28 h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 object-contain mb-4 opacity-90"
-                        />
-                        <span className="font-['Cinzel'] text-[#C5A059] text-xl md:text-2xl tracking-[0.3em]">2026</span>
+                    <div className="flex flex-col items-center mb-0">
+                        <div className="w-52 h-44 sm:w-60 sm:h-48 md:w-72 md:h-56 lg:w-80 lg:h-64 overflow-hidden">
+                            <img
+                                src={HeroIMage}
+                                alt="MMC Logo"
+                                className="w-full h-full object-contain -translate-y-6 sm:-translate-y-8 opacity-90"
+                            />
+                        </div>
                     </div>
                 </FadeIn>
 
                 <FadeIn delay={500}>
-                    <h1 className="text-center mb-10 relative">
+                    <h1 className="text-center mb-6 relative -mt-12 sm:-mt-14">
                         <span className="block font-['Cinzel'] text-3xl sm:text-5xl md:text-7xl lg:text-8xl text-transparent bg-clip-text bg-gradient-to-b from-[#C5A059] via-[#E5C580] to-[#8a701e] tracking-[0.03em] md:tracking-[0.05em] font-normal leading-[0.95]">
-                            MixMasters Club
+                            Mix Masters Club
                         </span>
                     </h1>
                 </FadeIn>
@@ -140,6 +142,10 @@ const HomeView = ({ navigateTo, mainEvent, judges = [], sponsors = [], settings 
                         </p>
                         <div className="h-px w-12 bg-[#C5A059]/40 mt-6" />
                     </div>
+                </FadeIn>
+
+                <FadeIn delay={950}>
+                    <span className="font-['Cinzel'] text-[#C5A059] text-xl md:text-2xl tracking-[0.3em] mb-12 block">2026</span>
                 </FadeIn>
 
                 <FadeIn delay={1100}>

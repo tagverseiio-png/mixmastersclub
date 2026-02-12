@@ -1,9 +1,37 @@
 import React from 'react';
-import { Calendar, MapPin, ChevronLeft, Share2 } from 'lucide-react';
+import { Calendar, MapPin, ChevronLeft, Share2, Radio } from 'lucide-react';
 import Button from '../components/ui/Button';
 
 const EventDetailView = ({ event, onBack, navigateTo }) => {
     if (!event) return null;
+
+    // Convert YouTube URL to embed URL
+    const getYouTubeEmbedUrl = (url) => {
+        if (!url) return null;
+        try {
+            const urlObj = new URL(url);
+            let videoId = null;
+            
+            // Handle youtube.com/watch?v=VIDEO_ID
+            if (urlObj.hostname.includes('youtube.com') && urlObj.searchParams.has('v')) {
+                videoId = urlObj.searchParams.get('v');
+            }
+            // Handle youtu.be/VIDEO_ID
+            else if (urlObj.hostname === 'youtu.be') {
+                videoId = urlObj.pathname.slice(1);
+            }
+            // Handle youtube.com/live/VIDEO_ID
+            else if (urlObj.hostname.includes('youtube.com') && urlObj.pathname.includes('/live/')) {
+                videoId = urlObj.pathname.split('/live/')[1];
+            }
+            
+            return videoId ? `https://www.youtube.com/embed/${videoId}?enablejsapi=1&modestbranding=1&rel=0` : null;
+        } catch {
+            return null;
+        }
+    };
+
+    const embedUrl = getYouTubeEmbedUrl(event.liveStreamUrl);
 
     return (
         <div className="pt-24 md:pt-32 pb-16 md:pb-24 min-h-screen bg-[#050505] animate-fade-in">
@@ -52,6 +80,25 @@ const EventDetailView = ({ event, onBack, navigateTo }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Live Stream Embed */}
+            {embedUrl && (
+                <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 border-b border-white/5">
+                    <div className="flex items-center gap-3 mb-6">
+                        <Radio size={20} className="text-red-500 animate-pulse" />
+                        <h2 className="font-['Cinzel'] text-2xl md:text-3xl text-white">Live Stream</h2>
+                    </div>
+                    <div className="relative w-full bg-black" style={{ paddingBottom: '56.25%' }}>
+                        <iframe
+                            src={embedUrl}
+                            className="absolute top-0 left-0 w-full h-full border border-white/10"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                            title="Live Stream"
+                        />
+                    </div>
+                </div>
+            )}
 
             <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 grid md:grid-cols-3 gap-10 md:gap-16">
                 <div className="md:col-span-2 space-y-12">

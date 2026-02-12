@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import SectionHeader from '../components/ui/SectionHeader';
-import { Calendar, MapPin, ArrowRight } from 'lucide-react';
+import { Calendar, MapPin, ArrowRight, Radio } from 'lucide-react';
 
 const EventsView = ({ events = [], onSelectEvent }) => {
     const [filter, setFilter] = useState('all'); // all, upcoming, active, completed
@@ -77,7 +77,16 @@ const EventsView = ({ events = [], onSelectEvent }) => {
 
                                 <p className="font-['Cormorant_Garamond'] text-gray-400 italic mb-8 line-clamp-2">{event.description}</p>
 
-                                <div className="mt-auto">
+                                <div className="mt-auto space-y-3">
+                                    {event.liveStreamUrl && (
+                                        <button
+                                            onClick={() => onSelectEvent(event)}
+                                            className="flex items-center justify-center gap-2 w-full bg-red-600 hover:bg-red-700 px-4 py-3 font-['Montserrat'] text-[10px] uppercase tracking-[0.2em] text-white transition-all border border-red-500 hover:border-red-400 group/live"
+                                        >
+                                            <Radio size={14} className="animate-pulse" />
+                                            Watch Live Stream
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => onSelectEvent(event)}
                                         className="flex items-center gap-2 font-['Montserrat'] text-[10px] uppercase tracking-[0.2em] text-white hover:text-[#C5A059] transition-colors group/btn"

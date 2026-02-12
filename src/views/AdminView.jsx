@@ -8,7 +8,6 @@ const ADMIN_TABS = [
     { id: 'gallery', label: 'Gallery' },
     { id: 'registrations', label: 'Registrations' },
     { id: 'faq', label: 'FAQ' },
-    { id: 'formats', label: 'Formats' },
     { id: 'results', label: 'Results' },
 ];
 
@@ -85,6 +84,14 @@ const buildApiRoot = (apiBase) => {
     return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
 };
 const isVideoUrl = (value = '') => /\.(mp4|webm|mov)(\?|#|$)/i.test(String(value).trim());
+const formatBytes = (value) => {
+    const bytes = Number(value) || 0;
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const size = bytes / Math.pow(1024, index);
+    return `${size.toFixed(size < 10 ? 1 : 0)} ${units[index]}`;
+};
 
 const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
     const [activeTab, setActiveTab] = useState('home');
@@ -98,7 +105,6 @@ const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
     const [gallery, setGallery] = useState([]);
     const [registrations, setRegistrations] = useState([]);
     const [faq, setFaq] = useState([]);
-    const [formats, setFormats] = useState([]);
     const [results, setResults] = useState({
         heading: '',
         subtitle: '',
@@ -321,6 +327,7 @@ const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
                     isMainEvent: Boolean(item.isMainEvent),
                     description: item.description || '',
                     price: item.price || '',
+                    liveStreamUrl: item.liveStreamUrl || '',
                 };
             })
         );
@@ -357,7 +364,6 @@ const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
             sponsors: sponsors.map((item) => ({ name: item.name || '', role: item.role || '' })),
             gallery: nextGallery,
             faq: faq.map((item) => ({ q: item.q || '', a: item.a || '' })),
-            formats: formats.map((item) => ({ title: item.title || '', desc: item.desc || '' })),
             results: {
                 heading: results.heading || '',
                 subtitle: results.subtitle || '',
@@ -756,6 +762,7 @@ const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
                                     isMainEvent: prev.length === 0,
                                     description: '',
                                     price: '',
+                                    liveStreamUrl: '',
                                 },
                             ])
                         }
@@ -883,6 +890,13 @@ const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
                                         rows={3}
                                         placeholder="Description"
                                         onChange={(e) => setEvents((prev) => prev.map((item) => (item._localId === event._localId ? { ...item, description: e.target.value } : item)))}
+                                    />
+                                    <FormInput
+                                        className="md:col-span-4"
+                                        label="Live Stream URL (YouTube - Optional)"
+                                        value={event.liveStreamUrl || ''}
+                                        placeholder="https://www.youtube.com/watch?v=..."
+                                        onChange={(e) => setEvents((prev) => prev.map((item) => (item._localId === event._localId ? { ...item, liveStreamUrl: e.target.value } : item)))}
                                     />
                                     <div className="md:col-span-4">
                                         <button
@@ -1135,11 +1149,29 @@ const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
                                                 <p><span className="text-gray-500">City:</span> {row.city || '-'}</p>
                                                 <p><span className="text-gray-500">Nationality:</span> {row.nationality || '-'}</p>
                                                 <p><span className="text-gray-500">Age:</span> {row.age || '-'}</p>
-                                                <p><span className="text-gray-500">Stage Name:</span> {row.stageName || '-'}</p>
                                                 <p><span className="text-gray-500">Experience:</span> {row.experience || '-'}</p>
                                                 <p className="md:col-span-2"><span className="text-gray-500">Instagram:</span> {row.instagram || '-'}</p>
                                                 <p className="md:col-span-2"><span className="text-gray-500">SoundCloud/Mixcloud:</span> {row.soundCloud || '-'}</p>
-                                                <p className="md:col-span-2"><span className="text-gray-500">Demo File:</span> {row.demoFile || '-'}</p>
+                                                <div className="md:col-span-2 space-y-2">
+                                                    <p>
+                                                        <span className="text-gray-500">Demo Upload:</span>{' '}
+                                                        {row.demoFileUrl ? (
+                                                            <a className="text-[#C5A059] hover:underline" href={row.demoFileUrl} target="_blank" rel="noreferrer">
+                                                                {row.demoFile || 'Download'}
+                                                            </a>
+                                                        ) : (
+                                                            '-'
+                                                        )}
+                                                        {row.demoFileSize ? ` • ${formatBytes(row.demoFileSize)}` : ''}
+                                                    </p>
+                                                    {row.demoFileUrl && row.demoFileMime?.startsWith('video/') && (
+                                                        <video className="w-full max-w-[520px] rounded-md border border-white/10" src={row.demoFileUrl} controls />
+                                                    )}
+                                                    {row.demoFileUrl && row.demoFileMime?.startsWith('audio/') && (
+                                                        <audio className="w-full max-w-[520px]" src={row.demoFileUrl} controls />
+                                                    )}
+                                                </div>
+                                                <p className="md:col-span-2"><span className="text-gray-500">Cloud Link:</span> {row.cloudLink || '-'}</p>
                                                 <p className="md:col-span-2"><span className="text-gray-500">Event:</span> {row.eventTitle || '-'} {row.eventDate ? `• ${row.eventDate}` : ''} {row.eventLocation ? `• ${row.eventLocation}` : ''}</p>
                                             </div>
                                             <div className="md:hidden pt-2">
@@ -1175,25 +1207,6 @@ const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
                                         <textarea className={inputClass} rows={3} value={item.a} onChange={(e) => setFaq((prev) => prev.map((entry) => (entry._localId === item._localId ? { ...entry, a: e.target.value } : entry)))} />
                                     </div>
                                     <button onClick={() => setFaq((prev) => prev.filter((entry) => entry._localId !== item._localId))} className="text-xs uppercase tracking-[0.12em] text-red-400 hover:text-red-300">
-                                        Remove
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    </SectionShell>
-                )}
-
-                {activeTab === 'formats' && (
-                    <SectionShell
-                        title="Formats"
-                        onAdd={() => setFormats((prev) => [...prev, { _localId: createId(), title: '', desc: '' }])}
-                    >
-                        <div className="space-y-3">
-                            {formats.map((item) => (
-                                <div key={item._localId} className="bg-[#0a0a0a] border border-white/10 p-4 grid md:grid-cols-[1fr_2fr_auto] gap-3 items-start">
-                                    <input className={inputClass} value={item.title} placeholder="Title" onChange={(e) => setFormats((prev) => prev.map((entry) => (entry._localId === item._localId ? { ...entry, title: e.target.value } : entry)))} />
-                                    <textarea className={inputClass} rows={2} value={item.desc} placeholder="Description" onChange={(e) => setFormats((prev) => prev.map((entry) => (entry._localId === item._localId ? { ...entry, desc: e.target.value } : entry)))} />
-                                    <button onClick={() => setFormats((prev) => prev.filter((entry) => entry._localId !== item._localId))} className="text-xs uppercase tracking-[0.12em] text-red-400 hover:text-red-300">
                                         Remove
                                     </button>
                                 </div>

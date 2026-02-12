@@ -1,12 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Menu, X, Instagram, Twitter, Youtube } from 'lucide-react';
-import Button from './components/ui/Button';
-import Logo from './assets/Icon.svg';
 
 // Views
 import HomeView from './views/HomeView';
 import AboutView from './views/AboutView';
-import FormatView from './views/FormatView';
 import JudgesView from './views/JudgesView';
 import SponsorsView from './views/SponsorsView';
 import GalleryView from './views/GalleryView';
@@ -31,7 +28,6 @@ const DESKTOP_NAV_ITEMS = [
     ],
   },
   { label: 'About', page: 'about' },
-  { label: 'Format', page: 'format' },
   { label: 'Gallery', page: 'gallery' },
   { label: 'FAQ', page: 'faq' },
   { label: 'Contact', page: 'contact' },
@@ -50,7 +46,6 @@ const TABLET_NAV_ITEMS = [
     ],
   },
   { label: 'About', page: 'about' },
-  { label: 'Format', page: 'format' },
   { label: 'Contact', page: 'contact' },
 ];
 
@@ -58,7 +53,6 @@ const MOBILE_NAV_ITEMS = [
   { label: 'HOME', page: 'home' },
   { label: 'EVENTS', page: 'events' },
   { label: 'ABOUT', page: 'about' },
-  { label: 'FORMAT', page: 'format' },
   { label: 'GALLERY', page: 'gallery' },
   { label: 'FAQ', page: 'faq' },
   { label: 'CONTACT', page: 'contact' },
@@ -85,7 +79,6 @@ const EMPTY_CONTENT = {
   sponsors: [],
   gallery: [],
   faq: [],
-  formats: [],
   results: { heading: '', subtitle: '', items: [] },
 };
 
@@ -110,7 +103,6 @@ function normalizeContent(payload = {}) {
     sponsors: Array.isArray(payload.sponsors) ? payload.sponsors : [],
     gallery: Array.isArray(payload.gallery) ? payload.gallery : [],
     faq: Array.isArray(payload.faq) ? payload.faq : [],
-    formats: Array.isArray(payload.formats) ? payload.formats : [],
     results: payload.results && typeof payload.results === 'object'
       ? {
           heading: payload.results.heading || '',
@@ -324,18 +316,14 @@ export default function App() {
     <div className="bg-[#050505] min-h-screen text-white font-sans selection:bg-[#C5A059] selection:text-black">
       {/* Navbar */}
       <nav className={`fixed top-0 w-full z-[60] transition-all duration-1000 ease-in-out ${scrolled ? 'bg-[#050505]/95 backdrop-blur-xl border-b border-white/5 py-3 md:py-4' : 'bg-transparent py-4 md:py-10'}`}>
-        <div className="container mx-auto px-4 sm:px-6 md:px-12 flex justify-between items-center gap-3">
-          <div className="flex items-center gap-4 cursor-pointer group" onClick={() => navigateTo('home')}>
-            <img src={Logo} alt="MMC Logo" className="w-9 h-9 md:w-10 md:h-10 object-contain opacity-90 transition-transform duration-700 group-hover:scale-110" />
-          </div>
-
+        <div className="container mx-auto px-4 sm:px-6 md:px-12 flex justify-between md:justify-center items-center gap-3">
           <div ref={navDropdownRef} className="hidden md:block">
             <div className="hidden lg:flex items-center gap-8 xl:gap-12">
               {DESKTOP_NAV_ITEMS.map((item) => (
                 <div key={item.page} className="relative">
                   <button
                     onClick={() => (item.subItems ? setOpenDropdown((prev) => (prev === item.page ? null : item.page)) : navigateTo(item.page))}
-                    className={`font-['Montserrat'] text-[9px] uppercase tracking-[0.2em] transition-all duration-500 hover:text-[#C5A059] ${isNavActive(item.page) ? 'text-white border-b border-[#C5A059] pb-1' : 'text-gray-500 border-b border-transparent pb-1'}`}
+                    className={`font-['Montserrat'] text-[10px] uppercase tracking-[0.2em] transition-all duration-500 hover:text-[#C5A059] ${isNavActive(item.page) ? 'text-white border-b border-[#C5A059] pb-1' : 'text-gray-500 border-b border-transparent pb-1'}`}
                   >
                     {item.label}{item.subItems ? ' +' : ''}
                   </button>
@@ -345,7 +333,7 @@ export default function App() {
                         {item.page === 'events' && mainEvent && (
                           <button
                             onClick={() => navigateTo('event-detail', null, mainEvent)}
-                            className="w-full text-left px-4 py-3 font-['Montserrat'] text-[9px] uppercase tracking-[0.18em] transition-colors text-[#C5A059] hover:text-white"
+                            className="w-full text-left px-4 py-3 font-['Montserrat'] text-[10px] uppercase tracking-[0.18em] transition-colors text-[#C5A059] hover:text-white"
                           >
                             Main Event
                           </button>
@@ -354,7 +342,7 @@ export default function App() {
                           <button
                             key={subItem.page}
                             onClick={() => navigateTo(subItem.page)}
-                            className={`w-full text-left px-4 py-3 font-['Montserrat'] text-[9px] uppercase tracking-[0.18em] transition-colors ${isNavActive(subItem.page) ? 'text-[#C5A059]' : 'text-gray-400 hover:text-white'}`}
+                            className={`w-full text-left px-4 py-3 font-['Montserrat'] text-[10px] uppercase tracking-[0.18em] transition-colors ${isNavActive(subItem.page) ? 'text-[#C5A059]' : 'text-gray-400 hover:text-white'}`}
                           >
                             {subItem.label}
                           </button>
@@ -371,7 +359,7 @@ export default function App() {
                 <div key={item.page} className="relative">
                   <button
                     onClick={() => (item.subItems ? setOpenDropdown((prev) => (prev === item.page ? null : item.page)) : navigateTo(item.page))}
-                    className={`font-['Montserrat'] text-[9px] uppercase tracking-[0.18em] transition-all duration-500 hover:text-[#C5A059] ${isNavActive(item.page) ? 'text-white border-b border-[#C5A059] pb-1' : 'text-gray-500 border-b border-transparent pb-1'}`}
+                    className={`font-['Montserrat'] text-[10px] uppercase tracking-[0.18em] transition-all duration-500 hover:text-[#C5A059] ${isNavActive(item.page) ? 'text-white border-b border-[#C5A059] pb-1' : 'text-gray-500 border-b border-transparent pb-1'}`}
                   >
                     {item.label}{item.subItems ? ' +' : ''}
                   </button>
@@ -381,7 +369,7 @@ export default function App() {
                         {item.page === 'events' && mainEvent && (
                           <button
                             onClick={() => navigateTo('event-detail', null, mainEvent)}
-                            className="w-full text-left px-4 py-3 font-['Montserrat'] text-[9px] uppercase tracking-[0.18em] transition-colors text-[#C5A059] hover:text-white"
+                            className="w-full text-left px-4 py-3 font-['Montserrat'] text-[10px] uppercase tracking-[0.18em] transition-colors text-[#C5A059] hover:text-white"
                           >
                             Main Event
                           </button>
@@ -390,7 +378,7 @@ export default function App() {
                           <button
                             key={subItem.page}
                             onClick={() => navigateTo(subItem.page)}
-                            className={`w-full text-left px-4 py-3 font-['Montserrat'] text-[9px] uppercase tracking-[0.18em] transition-colors ${isNavActive(subItem.page) ? 'text-[#C5A059]' : 'text-gray-400 hover:text-white'}`}
+                            className={`w-full text-left px-4 py-3 font-['Montserrat'] text-[10px] uppercase tracking-[0.18em] transition-colors ${isNavActive(subItem.page) ? 'text-[#C5A059]' : 'text-gray-400 hover:text-white'}`}
                           >
                             {subItem.label}
                           </button>
@@ -404,13 +392,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-8">
-            <Button
-              variant="primary"
-              className="hidden md:flex px-8 py-3"
-              onClick={() => navigateTo('register', 'artist')}
-            >
-              Register
-            </Button>
             <button className="md:hidden text-white hover:text-[#C5A059] transition-colors" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="Toggle menu">
               {isMobileMenuOpen ? <X strokeWidth={1} /> : <Menu strokeWidth={1} />}
             </button>
@@ -480,7 +461,6 @@ export default function App() {
         )}
         {activePage === 'event-detail' && <EventDetailView event={activeEvent} navigateTo={navigateTo} onBack={() => navigateTo('events')} />}
         {activePage === 'about' && <AboutView settings={siteContent.settings} />}
-        {activePage === 'format' && <FormatView navigateTo={navigateTo} formats={siteContent.formats} />}
         {activePage === 'judges' && <JudgesView judges={siteContent.judges} />}
         {activePage === 'sponsors' && <SponsorsView navigateTo={navigateTo} sponsors={siteContent.sponsors} />}
         {activePage === 'gallery' && <GalleryView gallery={siteContent.gallery} />}
@@ -547,8 +527,8 @@ export default function App() {
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-12 mb-20">
             <div className="text-center md:text-left">
-              <h2 className="font-['Cinzel'] text-2xl md:text-3xl text-white mb-4 tracking-[0.12em] md:tracking-[0.2em]">MIX MASTERS CLUB</h2>
-              <p className="font-['Cormorant_Garamond'] text-gray-500 italic text-lg">"In Pursuit of Sonic Perfection."</p>
+              <h2 className="font-['Cinzel'] text-2xl md:text-3xl text-white mb-4 tracking-[0.12em] md:tracking-[0.2em]">INTERNATIONAL TAMIL DJ BATTLE</h2>
+             
             </div>
             <div className="flex gap-8 md:gap-12 opacity-60 hover:opacity-100 transition-opacity duration-700">
               <Instagram size={20} strokeWidth={1} className="text-white hover:text-[#C5A059] transition-colors cursor-pointer" />
@@ -569,7 +549,6 @@ export default function App() {
             <div>
               <h4 className="font-['Montserrat'] text-[9px] text-white uppercase tracking-[0.2em] mb-6 font-bold">Details</h4>
               <ul className="space-y-4">
-                <li className="font-['Montserrat'] text-[9px] text-gray-600 uppercase tracking-[0.2em] hover:text-[#C5A059] cursor-pointer transition-colors" onClick={() => navigateTo('format')}>Format</li>
                 <li className="font-['Montserrat'] text-[9px] text-gray-600 uppercase tracking-[0.2em] hover:text-[#C5A059] cursor-pointer transition-colors" onClick={() => navigateTo('faq')}>Intel</li>
                 <li className="font-['Montserrat'] text-[9px] text-gray-600 uppercase tracking-[0.2em] hover:text-[#C5A059] cursor-pointer transition-colors" onClick={() => navigateTo('results')}>Results</li>
               </ul>
@@ -601,8 +580,19 @@ export default function App() {
             </div>
           </div>
 
-          <div className="border-t border-white/5 pt-12 text-center">
+          <div className="border-t border-white/5 pt-12 text-center space-y-4">
             <p className="font-['Montserrat'] text-[9px] text-gray-700 uppercase tracking-widest">© 2026 Mix Masters Club</p>
+            <p className="font-['Montserrat'] text-[9px] text-gray-600 uppercase tracking-widest">
+              Developed by{' '}
+              <a 
+                href="https://www.t4gverse.com/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-[#C5A059] hover:text-[#E5C580] transition-colors"
+              >
+                T4GVerse
+              </a>
+            </p>
           </div>
         </div>
       </footer>
