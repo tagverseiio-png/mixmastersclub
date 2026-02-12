@@ -529,7 +529,7 @@ export default function App() {
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-12 mb-20">
             <div className="text-center md:text-left">
-              <h2 className="font-['Cinzel'] text-2xl md:text-3xl text-white mb-4 tracking-[0.12em] md:tracking-[0.2em]">INTERNATIONAL TAMIL DJ BATTLE</h2>
+              
              
             </div>
             <div className="flex gap-8 md:gap-12 opacity-60 hover:opacity-100 transition-opacity duration-700">
