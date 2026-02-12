@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Check, Upload, ChevronLeft, Globe, Instagram, FileAudio, Loader2, AlertCircle, CheckCircle, X, Info, AlertTriangle } from 'lucide-react';
-import Herologo from '../assets/hero.svg';
+import Herologo from '../assets/Hero.svg';
 
 const buildApiRoot = (apiBase) => {
     const normalized = (apiBase || '').replace(/\/$/, '');
