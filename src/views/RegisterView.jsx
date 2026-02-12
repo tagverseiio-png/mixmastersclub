@@ -93,9 +93,9 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
             return;
         }
 
-        const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+        const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks for reliability on mobile
         const chunks = Math.ceil(file.size / CHUNK_SIZE);
-        const isLargeFile = file.size > 50 * 1024 * 1024; // Use chunked upload for files > 50MB
+        const isLargeFile = file.size > 20 * 1024 * 1024; // Use chunked upload for files > 20MB
         
         setIsUploading(true);
         setUploadError('');
@@ -117,8 +117,39 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
         }, 100);
 
         try {
-            if (isLargeFile && chunks > 1) {
-                // Chunked upload for large files
+            const uploadSingleFile = async () => {
+                const body = new FormData();
+                body.append('media', file);
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min
+
+                const response = await fetch(`${apiRoot}/public/registrations/upload`, {
+                    method: 'POST',
+                    body,
+                    signal: controller.signal,
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({
+                        message: `Upload failed with status ${response.status}`,
+                    }));
+                    throw new Error(errorData?.message || `Upload failed with status ${response.status}`);
+                }
+
+                const payload = await response.json();
+                setFormData(prev => ({
+                    ...prev,
+                    demoFileName: payload.fileName || file.name,
+                    demoFileUrl: payload.url || '',
+                    demoFileSize: payload.size || 0,
+                    demoFileMime: payload.mimeType || file.type || '',
+                }));
+            };
+
+            const uploadChunkedFile = async () => {
                 const uploadId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
                 let uploadedSize = 0;
 
@@ -136,22 +167,47 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                     chunkForm.append('fileSize', file.size);
                     chunkForm.append('mimeType', file.type);
 
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min per chunk
+                    let success = false;
+                    for (let attempt = 0; attempt < 3; attempt++) {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 sec per chunk
 
-                    const response = await fetch(`${apiRoot}/public/registrations/upload-chunk`, {
-                        method: 'POST',
-                        body: chunkForm,
-                        signal: controller.signal,
-                    });
+                        try {
+                            const response = await fetch(`${apiRoot}/public/registrations/upload-chunk`, {
+                                method: 'POST',
+                                body: chunkForm,
+                                signal: controller.signal,
+                            });
 
-                    clearTimeout(timeoutId);
+                            clearTimeout(timeoutId);
 
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({
-                            message: `Chunk ${i + 1}/${chunks} upload failed`,
-                        }));
-                        throw new Error(errorData?.message || `Chunk ${i + 1} failed`);
+                            if (response.status === 404 || response.status === 501) {
+                                throw new Error('chunk_unsupported');
+                            }
+
+                            if (!response.ok) {
+                                const errorData = await response.json().catch(() => ({
+                                    message: `Chunk ${i + 1}/${chunks} upload failed`,
+                                }));
+                                throw new Error(errorData?.message || `Chunk ${i + 1} failed`);
+                            }
+
+                            success = true;
+                            break;
+                        } catch (err) {
+                            clearTimeout(timeoutId);
+                            if (err?.message === 'chunk_unsupported') {
+                                throw err;
+                            }
+                            if (attempt === 2) {
+                                throw err;
+                            }
+                            await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+                        }
+                    }
+
+                    if (!success) {
+                        throw new Error(`Chunk ${i + 1} failed`);
                     }
 
                     uploadedSize = end;
@@ -161,7 +217,6 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                     }));
                 }
 
-                // Finalize upload
                 const finalResponse = await fetch(`${apiRoot}/public/registrations/upload-finalize`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -186,38 +241,20 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                     demoFileSize: payload.size || 0,
                     demoFileMime: payload.mimeType || file.type || '',
                 }));
-            } else {
-                // Single upload for smaller files (faster)
-                const body = new FormData();
-                body.append('media', file);
+            };
 
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min
-
-                const response = await fetch(`${apiRoot}/public/registrations/upload`, {
-                    method: 'POST',
-                    body,
-                    signal: controller.signal,
-                    headers: {},
-                });
-
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({
-                        message: `Upload failed with status ${response.status}`,
-                    }));
-                    throw new Error(errorData?.message || `Upload failed with status ${response.status}`);
+            if (isLargeFile && chunks > 1) {
+                try {
+                    await uploadChunkedFile();
+                } catch (err) {
+                    if (err?.message === 'chunk_unsupported') {
+                        await uploadSingleFile();
+                    } else {
+                        throw err;
+                    }
                 }
-
-                const payload = await response.json();
-                setFormData(prev => ({
-                    ...prev,
-                    demoFileName: payload.fileName || file.name,
-                    demoFileUrl: payload.url || '',
-                    demoFileSize: payload.size || 0,
-                    demoFileMime: payload.mimeType || file.type || '',
-                }));
+            } else {
+                await uploadSingleFile();
             }
 
             clearInterval(uploadInterval);
