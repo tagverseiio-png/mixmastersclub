@@ -18,7 +18,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
-const CHUNKS_DIR = path.join(UPLOADS_DIR, 'chunks');
 
 const PORT = Number(process.env.PORT || 4000);
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -52,27 +51,6 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set([
   '.png',
   '.webp',
   '.avif',
-]);
-const REGISTRATION_UPLOAD_TYPES = new Set([
-  'video/mp4',
-  'video/webm',
-  'video/quicktime',
-  'audio/mpeg',
-  'audio/mp3',
-  'audio/wav',
-  'audio/x-wav',
-  'audio/aac',
-  'audio/ogg',
-  'audio/webm',
-]);
-const REGISTRATION_UPLOAD_EXTENSIONS = new Set([
-  '.mp4',
-  '.webm',
-  '.mov',
-  '.mp3',
-  '.wav',
-  '.aac',
-  '.ogg',
 ]);
 
 const CONTENT_DOC_ID = 'site_content_v1';
@@ -274,7 +252,7 @@ app.use(
   })
 );
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Set request timeout to 5 minutes for large file uploads
 app.use((req, res, next) => {
@@ -308,27 +286,6 @@ const upload = multer({
     cb(null, true);
   },
 });
-const registrationUpload = multer({
-  storage,
-  limits: { fileSize: 80 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const mimeAllowed = REGISTRATION_UPLOAD_TYPES.has(file.mimetype);
-    const extensionAllowed = REGISTRATION_UPLOAD_EXTENSIONS.has(ext);
-    if (!mimeAllowed && !extensionAllowed) {
-      cb(new Error(`Unsupported file type: ${file.mimetype}`));
-      return;
-    }
-    cb(null, true);
-  },
-});
-const chunkUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 12 * 1024 * 1024 },
-  fileFilter: (_req, _file, cb) => cb(null, true),
-});
-
-const getChunkPath = (uploadId, chunkIndex) => path.join(CHUNKS_DIR, `${uploadId}-${chunkIndex}`);
 
 const client = new MongoClient(MONGO_URI, {
   maxPoolSize: 10,
@@ -372,25 +329,25 @@ function sanitizeContent(payload) {
 
 async function ensureLocalStorageDir() {
   await fs.mkdir(UPLOADS_DIR, { recursive: true });
-  await fs.mkdir(CHUNKS_DIR, { recursive: true });
 }
 
 async function ensureContentDoc() {
   const existing = await contentCollection.findOne({ _id: CONTENT_DOC_ID });
-  if (existing) return;
+  if (existing) return false; // already exists, no seeding needed
 
   await contentCollection.insertOne({
     _id: CONTENT_DOC_ID,
     ...sanitizeContent(DEFAULT_CONTENT),
+    _seeded: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+  return true; // freshly created, seeding is needed
 }
 
-async function ensureFaqSeed() {
-  const doc = await contentCollection.findOne({ _id: CONTENT_DOC_ID }, { projection: { faq: 1 } });
-  const hasFaq = Array.isArray(doc?.faq) && doc.faq.length > 0;
-  if (hasFaq) return;
+async function ensureFaqSeed(isNewDoc) {
+  // Only seed FAQ on first-time setup (fresh document)
+  if (!isNewDoc) return;
 
   await contentCollection.updateOne(
     { _id: CONTENT_DOC_ID },
@@ -403,28 +360,17 @@ async function ensureFaqSeed() {
   );
 }
 
-async function ensureSeedData() {
-  const doc = await contentCollection.findOne({ _id: CONTENT_DOC_ID });
-  if (!doc) return;
-  const updates = {};
-
-  if (!Array.isArray(doc.events) || doc.events.length === 0) {
-    updates.events = SEED_EVENTS;
-  }
-  if (!Array.isArray(doc.judges) || doc.judges.length === 0) {
-    updates.judges = SEED_JUDGES;
-  }
-  if (!Array.isArray(doc.gallery) || doc.gallery.length === 0) {
-    updates.gallery = SEED_GALLERY;
-  }
-
-  if (Object.keys(updates).length === 0) return;
+async function ensureSeedData(isNewDoc) {
+  // Only seed sample data on first-time setup (fresh document)
+  if (!isNewDoc) return;
 
   await contentCollection.updateOne(
     { _id: CONTENT_DOC_ID },
     {
       $set: {
-        ...updates,
+        events: SEED_EVENTS,
+        judges: SEED_JUDGES,
+        gallery: SEED_GALLERY,
         updatedAt: new Date(),
       },
     }
@@ -556,10 +502,6 @@ function sanitizeRegistrationPayload(payload) {
     instagram: source.instagram ? String(source.instagram).trim() : '',
     experience: source.experience ? String(source.experience).trim() : '',
     soundCloud: source.soundCloud ? String(source.soundCloud).trim() : '',
-    demoFile: source.demoFile ? String(source.demoFile).trim() : '',
-    demoFileUrl: source.demoFileUrl ? String(source.demoFileUrl).trim() : '',
-    demoFileSize: Number.isFinite(Number(source.demoFileSize)) ? Number(source.demoFileSize) : 0,
-    demoFileMime: source.demoFileMime ? String(source.demoFileMime).trim() : '',
     cloudLink: source.cloudLink ? String(source.cloudLink).trim() : '',
     source: source.source ? String(source.source).trim() : 'website',
   };
@@ -655,8 +597,6 @@ function buildAdminHtml(registration) {
             <tr><td style="padding: 8px 0; color: #666;"><strong>Experience:</strong></td><td>${registration.experience} Years</td></tr>
             <tr><td style="padding: 8px 0; color: #666;"><strong>Instagram:</strong></td><td>${registration.instagram}</td></tr>
             <tr><td style="padding: 8px 0; color: #666;"><strong>Showcase:</strong></td><td>${registration.soundCloud || 'N/A'}</td></tr>
-            <tr><td style="padding: 8px 0; color: #666;"><strong>Demo File:</strong></td><td>${registration.demoFile || 'N/A'}</td></tr>
-            <tr><td style="padding: 8px 0; color: #666;"><strong>Demo URL:</strong></td><td>${registration.demoFileUrl || 'N/A'}</td></tr>
             <tr><td style="padding: 8px 0; color: #666;"><strong>Cloud Link:</strong></td><td>${registration.cloudLink || 'N/A'}</td></tr>
           </table>
           <p style="margin-top: 30px; font-size: 12px; color: #999;">Submitted at: ${registration.createdAt}</p>
@@ -723,74 +663,6 @@ app.get('/api/public/content', async (_req, res) => {
   res.json(content);
 });
 
-app.post('/api/public/registrations/upload-chunk', chunkUpload.single('chunk'), async (req, res) => {
-  const { uploadId, chunkIndex } = req.body || {};
-  if (!req.file || !uploadId || Number.isNaN(Number(chunkIndex))) {
-    return res.status(400).json({ message: 'Missing upload chunk data' });
-  }
-
-  const chunkPath = getChunkPath(String(uploadId), Number(chunkIndex));
-  await fs.writeFile(chunkPath, req.file.buffer);
-  return res.status(201).json({ ok: true });
-});
-
-app.post('/api/public/registrations/upload-finalize', async (req, res) => {
-  const { uploadId, fileName, fileSize, mimeType, totalChunks } = req.body || {};
-  if (!uploadId || !fileName || !mimeType || !totalChunks) {
-    return res.status(400).json({ message: 'Missing upload metadata' });
-  }
-
-  const ext = path.extname(fileName || '').toLowerCase();
-  const total = Number(totalChunks);
-  if (!REGISTRATION_UPLOAD_EXTENSIONS.has(ext) || !REGISTRATION_UPLOAD_TYPES.has(mimeType)) {
-    return res.status(400).json({ message: 'Unsupported file type' });
-  }
-  if (!total || total < 1) {
-    return res.status(400).json({ message: 'Invalid chunk count' });
-  }
-
-  const finalName = `${Date.now()}-${crypto.randomUUID()}${ext}`;
-  const finalPath = path.join(UPLOADS_DIR, finalName);
-
-  for (let i = 0; i < total; i += 1) {
-    const chunkPath = getChunkPath(String(uploadId), i);
-    try {
-      const data = await fs.readFile(chunkPath);
-      await fs.appendFile(finalPath, data);
-      await fs.unlink(chunkPath);
-    } catch {
-      return res.status(400).json({ message: `Missing chunk ${i + 1} of ${total}` });
-    }
-  }
-
-  const stats = await fs.stat(finalPath);
-  const relativePath = `/uploads/${finalName}`;
-  const baseUrl = PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
-  return res.status(201).json({
-    fileName,
-    mimeType,
-    size: stats.size || Number(fileSize) || 0,
-    path: relativePath,
-    url: `${baseUrl}${relativePath}`,
-  });
-});
-
-app.post('/api/public/registrations/upload', registrationUpload.single('media'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ message: 'No file uploaded' });
-  }
-
-  const relativePath = `/uploads/${req.file.filename}`;
-  const baseUrl = PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
-  return res.status(201).json({
-    fileName: req.file.originalname,
-    mimeType: req.file.mimetype,
-    size: req.file.size,
-    path: relativePath,
-    url: `${baseUrl}${relativePath}`,
-  });
-});
-
 app.post('/api/public/registrations', async (req, res) => {
   const payload = sanitizeRegistrationPayload(req.body);
   if (!payload.eventId) {
@@ -798,6 +670,9 @@ app.post('/api/public/registrations', async (req, res) => {
   }
   if (!payload.fullName || !payload.email) {
     return res.status(400).json({ message: 'fullName and email are required' });
+  }
+  if (!payload.cloudLink) {
+    return res.status(400).json({ message: 'cloudLink is required' });
   }
 
   const activeEvent = await getActiveEventById(payload.eventId);
@@ -1043,9 +918,9 @@ await client.connect();
 const db = client.db(MONGO_DB_NAME);
 contentCollection = db.collection('content');
 registrationsCollection = db.collection('registrations');
-await ensureContentDoc();
-await ensureFaqSeed();
-await ensureSeedData();
+const isNewDoc = await ensureContentDoc();
+await ensureFaqSeed(isNewDoc);
+await ensureSeedData(isNewDoc);
 
 const server = app.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);

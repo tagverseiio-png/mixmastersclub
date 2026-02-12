@@ -1,29 +1,11 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Check, Upload, ChevronLeft, Globe, Instagram, FileAudio, Loader2, AlertCircle, CheckCircle, X, Info, AlertTriangle } from 'lucide-react';
+import { Check, ChevronLeft, Globe, Instagram, AlertCircle, CheckCircle, X, Info, AlertTriangle } from 'lucide-react';
 import Herologo from '../assets/Hero.svg';
 
 const buildApiRoot = (apiBase) => {
     const normalized = (apiBase || '').replace(/\/$/, '');
     if (!normalized) return '';
     return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
-};
-
-const formatBytes = (bytes) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
-};
-
-const formatTime = (ms) => {
-    if (ms < 1000) return `${ms}ms`;
-    const seconds = Math.floor(ms / 1000);
-    const milliseconds = ms % 1000;
-    if (seconds < 60) return `${seconds}.${Math.floor(milliseconds / 100)}s`;
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}m ${remainingSeconds}s`;
 };
 
 const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', events = [], apiBase = '', navigateTo }) => {
@@ -38,23 +20,11 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
         experience: '',
         soundCloud: '',
         cloudLink: '',
-        demoFileName: '',
-        demoFileUrl: '',
-        demoFileSize: 0,
-        demoFileMime: '',
         activeEventId: '',
     });
-    const [uploadError, setUploadError] = useState('');
-    const [isUploading, setIsUploading] = useState(false);
-    const [uploadSuccess, setUploadSuccess] = useState(false);
-    const [uploadMetrics, setUploadMetrics] = useState({
-        fileName: '',
-        fileSize: 0,
-        uploadedSize: 0,
-        elapsedTime: 0,
-        serverTime: 0,
-    });
     const [alert, setAlert] = useState(null); // { type: 'error'|'warning'|'success'|'info', title: '', message: '' }
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [registrationSuccess, setRegistrationSuccess] = useState(false); // true after successful submit
 
     // Auto-dismiss alerts after 6 seconds
     useEffect(() => {
@@ -86,242 +56,6 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const uploadDemoFile = async (file) => {
-        const apiRoot = buildApiRoot(apiBase || import.meta.env.VITE_PUBLIC_API_BASE || '');
-        if (!apiRoot) {
-            setUploadError('Backend API base is missing. Set VITE_PUBLIC_API_BASE.');
-            return;
-        }
-
-        const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks for reliability on mobile
-        const chunks = Math.ceil(file.size / CHUNK_SIZE);
-        const isLargeFile = file.size > 20 * 1024 * 1024; // Use chunked upload for files > 20MB
-        
-        setIsUploading(true);
-        setUploadError('');
-        setUploadSuccess(false);
-        setUploadMetrics({
-            fileName: file.name,
-            fileSize: file.size,
-            uploadedSize: 0,
-            elapsedTime: 0,
-            serverTime: 0,
-        });
-
-        const startTime = Date.now();
-        let uploadInterval;
-
-        uploadInterval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            setUploadMetrics(prev => ({ ...prev, elapsedTime: elapsed }));
-        }, 100);
-
-        try {
-            const uploadSingleFile = async () => {
-                const body = new FormData();
-                body.append('media', file);
-
-                await new Promise((resolve, reject) => {
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('POST', `${apiRoot}/public/registrations/upload`);
-                    xhr.timeout = 300000; // 5 minutes
-
-                    xhr.upload.addEventListener('progress', (e) => {
-                        if (e.lengthComputable) {
-                            setUploadMetrics(prev => ({
-                                ...prev,
-                                uploadedSize: e.loaded,
-                                fileSize: e.total,
-                            }));
-                        }
-                    });
-
-                    xhr.addEventListener('load', () => {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            try {
-                                const payload = JSON.parse(xhr.responseText);
-                                setFormData(prev => ({
-                                    ...prev,
-                                    demoFileName: payload.fileName || file.name,
-                                    demoFileUrl: payload.url || '',
-                                    demoFileSize: payload.size || 0,
-                                    demoFileMime: payload.mimeType || file.type || '',
-                                }));
-                                setUploadMetrics(prev => ({
-                                    ...prev,
-                                    uploadedSize: file.size,
-                                }));
-                                resolve();
-                            } catch (err) {
-                                reject(new Error('Failed to parse server response.'));
-                            }
-                        } else {
-                            try {
-                                const payload = JSON.parse(xhr.responseText);
-                                reject(new Error(payload?.message || `Upload failed with status ${xhr.status}`));
-                            } catch {
-                                reject(new Error(`Upload failed with status ${xhr.status}`));
-                            }
-                        }
-                    });
-
-                    xhr.addEventListener('error', () => {
-                        reject(new TypeError('Network error occurred. Please check your connection and try again.'));
-                    });
-
-                    xhr.addEventListener('timeout', () => {
-                        reject(new Error('Upload timeout. Please try again with a smaller file or better connection.'));
-                    });
-
-                    xhr.addEventListener('abort', () => {
-                        reject(new Error('Upload was cancelled.'));
-                    });
-
-                    xhr.send(body);
-                });
-            };
-
-            const uploadChunkedFile = async () => {
-                const uploadId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
-                let uploadedSize = 0;
-
-                for (let i = 0; i < chunks; i++) {
-                    const start = i * CHUNK_SIZE;
-                    const end = Math.min(start + CHUNK_SIZE, file.size);
-                    const chunk = file.slice(start, end);
-
-                    const chunkForm = new FormData();
-                    chunkForm.append('chunk', chunk);
-                    chunkForm.append('uploadId', uploadId);
-                    chunkForm.append('chunkIndex', i);
-                    chunkForm.append('totalChunks', chunks);
-                    chunkForm.append('fileName', file.name);
-                    chunkForm.append('fileSize', file.size);
-                    chunkForm.append('mimeType', file.type);
-
-                    let success = false;
-                    for (let attempt = 0; attempt < 3; attempt++) {
-                        const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 sec per chunk
-
-                        try {
-                            const response = await fetch(`${apiRoot}/public/registrations/upload-chunk`, {
-                                method: 'POST',
-                                body: chunkForm,
-                                signal: controller.signal,
-                            });
-
-                            clearTimeout(timeoutId);
-
-                            if (response.status === 404 || response.status === 501) {
-                                throw new Error('chunk_unsupported');
-                            }
-
-                            if (!response.ok) {
-                                const errorData = await response.json().catch(() => ({
-                                    message: `Chunk ${i + 1}/${chunks} upload failed`,
-                                }));
-                                throw new Error(errorData?.message || `Chunk ${i + 1} failed`);
-                            }
-
-                            success = true;
-                            break;
-                        } catch (err) {
-                            clearTimeout(timeoutId);
-                            if (err?.message === 'chunk_unsupported') {
-                                throw err;
-                            }
-                            if (attempt === 2) {
-                                throw err;
-                            }
-                            await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
-                        }
-                    }
-
-                    if (!success) {
-                        throw new Error(`Chunk ${i + 1} failed`);
-                    }
-
-                    uploadedSize = end;
-                    setUploadMetrics(prev => ({
-                        ...prev,
-                        uploadedSize,
-                    }));
-                }
-
-                const finalResponse = await fetch(`${apiRoot}/public/registrations/upload-finalize`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        uploadId,
-                        fileName: file.name,
-                        fileSize: file.size,
-                        mimeType: file.type,
-                        totalChunks: chunks,
-                    }),
-                });
-
-                if (!finalResponse.ok) {
-                    throw new Error('Failed to finalize upload');
-                }
-
-                const payload = await finalResponse.json();
-                setFormData(prev => ({
-                    ...prev,
-                    demoFileName: payload.fileName || file.name,
-                    demoFileUrl: payload.url || '',
-                    demoFileSize: payload.size || 0,
-                    demoFileMime: payload.mimeType || file.type || '',
-                }));
-            };
-
-            if (isLargeFile && chunks > 1) {
-                try {
-                    await uploadChunkedFile();
-                } catch (err) {
-                    if (err?.message === 'chunk_unsupported') {
-                        await uploadSingleFile();
-                    } else {
-                        throw err;
-                    }
-                }
-            } else {
-                await uploadSingleFile();
-            }
-
-            clearInterval(uploadInterval);
-            const serverTime = Date.now() - startTime;
-            setUploadMetrics(prev => ({ ...prev, serverTime }));
-            setUploadSuccess(true);
-            setTimeout(() => setUploadSuccess(false), 3000);
-            setIsUploading(false);
-        } catch (error) {
-            clearInterval(uploadInterval);
-            setIsUploading(false);
-
-            if (error.name === 'AbortError') {
-                setUploadError('Upload timeout. Please try again with a smaller file or better connection.');
-            } else if (error instanceof TypeError) {
-                setUploadError('Network error occurred. Please check your connection and try again.');
-            } else {
-                setUploadError(error?.message || 'Upload failed. Please try again.');
-            }
-        }
-    };
-
-    const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        setUploadError('');
-
-        if (!file) {
-            return;
-        }
-
-        // Skip duration check for videos - validate on backend instead
-        // This prevents blocking on large files
-        uploadDemoFile(file);
-    };
-
     const handleNext = () => {
         if (!selectedActiveEvent) {
             showAlert('warning', 'No Active Event', 'No active event is available for registration right now.');
@@ -344,12 +78,8 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
             }
         }
         if (step === 3) {
-            if (isUploading) {
-                showAlert('info', 'Upload In Progress', 'Please wait for the upload to finish.');
-                return;
-            }
-            if (!formData.demoFileUrl && !formData.cloudLink) {
-                showAlert('warning', 'Missing Demo', 'Please upload a demo file or provide a cloud storage link before continuing.');
+            if (!formData.cloudLink) {
+                showAlert('warning', 'Missing Demo Link', 'Please provide a cloud storage link before continuing.');
                 return;
             }
         }
@@ -370,6 +100,8 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
             return;
         }
 
+        setIsSubmitting(true);
+
         fetch(`${apiRoot}/public/registrations`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -383,10 +115,6 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                 instagram: formData.instagram,
                 experience: formData.experience,
                 soundCloud: formData.soundCloud,
-                demoFile: formData.demoFileName,
-                demoFileUrl: formData.demoFileUrl,
-                demoFileSize: formData.demoFileSize,
-                demoFileMime: formData.demoFileMime,
                 cloudLink: formData.cloudLink,
                 source: 'website',
             }),
@@ -406,10 +134,14 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                 showAlert('success', 'Registration Complete!', payload?.emailSent 
                     ? 'Your registration has been saved and confirmation email has been sent.' 
                     : 'Your registration has been saved. Confirmation email will be sent shortly.');
-                setTimeout(() => navigateTo('home'), 2000);
+                setRegistrationSuccess(true);
+                setStep(5);
             })
             .catch((error) => {
                 showAlert('error', 'Registration Failed', error.message || 'An unexpected error occurred. Please try again.');
+            })
+            .finally(() => {
+                setIsSubmitting(false);
             });
     };
 
@@ -494,7 +226,7 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
 
                 <div className="flex gap-1 sm:gap-2 mb-8 sm:mb-12 justify-center">
                     {[1, 2, 3, 4].map(i => (
-                        <div key={i} className={`h-1 w-12 sm:w-20 transition-all duration-700 ${i <= step ? 'bg-[#C5A059] shadow-[0_0_10px_#C5A059]' : 'bg-white/5'}`} />
+                        <div key={i} className={`h-1 w-12 sm:w-20 transition-all duration-700 ${i <= step || registrationSuccess ? 'bg-[#C5A059] shadow-[0_0_10px_#C5A059]' : 'bg-white/5'}`} />
                     ))}
                 </div>
 
@@ -569,109 +301,6 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                                     <div className="h-px w-24 bg-[#C5A059]/50 mx-auto mt-2" />
                                 </div>
 
-                                <div className={`group pt-12 pb-12 border-2 border-dashed ${uploadError ? 'border-red-500/50 bg-red-500/5' : isUploading ? 'border-[#C5A059] bg-[#C5A059]/5' : 'border-white/10 bg-white/5'} p-10 text-center hover:border-[#C5A059] transition-all ${isUploading ? 'cursor-wait' : 'cursor-pointer'} relative hover:bg-white/10`}>
-                                    <input 
-                                        type="file" 
-                                        className={`absolute inset-0 w-full h-full opacity-0 ${isUploading ? 'cursor-wait' : 'cursor-pointer'}`} 
-                                        onChange={handleFileUpload} 
-                                        accept="audio/*,video/*,.pdf"
-                                        disabled={isUploading}
-                                    />
-                                    {isUploading ? (
-                                        <div className="text-[#C5A059]">
-                                            <Loader2 className="mx-auto mb-4 animate-spin" size={48} />
-                                            <span className="font-['Montserrat'] text-sm uppercase tracking-[0.2em] block mb-4">Uploading to VM Storage...</span>
-                                            
-                                            {/* Upload Progress Bar */}
-                                            <div className="w-full bg-[#0d0d0d] h-1 rounded-full overflow-hidden mb-4">
-                                                <div 
-                                                    className="h-full bg-gradient-to-r from-[#C5A059] to-[#E5C580] transition-all duration-300"
-                                                    style={{ 
-                                                        width: uploadMetrics.fileSize > 0 
-                                                            ? `${(uploadMetrics.uploadedSize / uploadMetrics.fileSize) * 100}%` 
-                                                            : '0%' 
-                                                    }}
-                                                />
-                                            </div>
-
-                                            {/* Upload Metrics */}
-                                            <div className="space-y-2 text-left">
-                                                <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
-                                                    <span>File Name:</span>
-                                                    <span className="text-white truncate ml-2 max-w-[200px]">{uploadMetrics.fileName}</span>
-                                                </div>
-                                                <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
-                                                    <span>Size:</span>
-                                                    <span className="text-[#C5A059]">
-                                                        {formatBytes(uploadMetrics.uploadedSize)} / {formatBytes(uploadMetrics.fileSize)}
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
-                                                    <span>Progress:</span>
-                                                    <span className="text-[#C5A059]">
-                                                        {uploadMetrics.fileSize > 0 
-                                                            ? `${Math.round((uploadMetrics.uploadedSize / uploadMetrics.fileSize) * 100)}%`
-                                                            : '0%'
-                                                        }
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
-                                                    <span>Speed:</span>
-                                                    <span className="text-white">
-                                                        {uploadMetrics.elapsedTime > 0
-                                                            ? `${((uploadMetrics.uploadedSize / 1024 / 1024) / (uploadMetrics.elapsedTime / 1000)).toFixed(1)} Mbps`
-                                                            : '-'
-                                                        }
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
-                                                    <span>Elapsed Time:</span>
-                                                    <span className="text-white">{formatTime(uploadMetrics.elapsedTime)}</span>
-                                                </div>
-                                            </div>
-
-                                            <span className="text-[10px] text-gray-500 mt-4 block uppercase tracking-widest">Please wait, do not close this page</span>
-                                        </div>
-                                    ) : formData.demoFileName ? (
-                                        <div className="text-[#C5A059]">
-                                            <FileAudio className="mx-auto mb-4 animate-bounce" size={48} />
-                                            <span className="font-['Montserrat'] text-sm uppercase tracking-[0.2em] block">{formData.demoFileName}</span>
-                                            {formData.demoFileUrl && (
-                                                <span className="text-[10px] text-gray-500 mt-2 block uppercase tracking-widest">Stored on VM</span>
-                                            )}
-                                            <span className="text-[10px] text-gray-500 mt-2 block uppercase tracking-widest">Click to change file</span>
-                                        </div>
-                                    ) : (
-                                        <div className="text-gray-500">
-                                            <Upload className="mx-auto mb-4 group-hover:text-[#C5A059] transition-colors" size={48} />
-                                            <span className="font-['Montserrat'] text-sm uppercase tracking-[0.2em] block group-hover:text-white transition-colors">Upload Demo Mix (MP4/MP3)</span>
-                                            <span className="text-[10px] text-gray-600 mt-4 block uppercase tracking-[0.15em]">Video Limit: 10 Minutes | Max 80MB</span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {uploadSuccess && (
-                                    <div className="bg-green-900/20 border-2 border-green-500/50 rounded p-4 flex items-center gap-3 animate-fade-in">
-                                        <CheckCircle className="text-green-500 flex-shrink-0" size={24} />
-                                        <div className="flex-1">
-                                            <p className="text-green-400 text-sm font-['Montserrat'] uppercase tracking-[0.2em]">Upload Successful</p>
-                                            <p className="text-green-500/70 text-[10px] uppercase tracking-[0.15em] mt-1">
-                                                {formatBytes(uploadMetrics.fileSize)} uploaded in {formatTime(uploadMetrics.serverTime)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {uploadError && (
-                                    <div className="bg-red-900/20 border-2 border-red-500/50 rounded p-4 flex items-center gap-3 animate-fade-in">
-                                        <AlertCircle className="text-red-500 flex-shrink-0" size={24} />
-                                        <div className="flex-1">
-                                            <p className="text-red-400 text-sm font-['Montserrat'] uppercase tracking-[0.2em]">Upload Failed</p>
-                                            <p className="text-red-500/70 text-[10px] uppercase tracking-[0.15em] mt-1">{uploadError}</p>
-                                        </div>
-                                    </div>
-                                )}
-
                                 <div className="group space-y-2">
                                     <label className="text-[10px] font-['Montserrat'] text-gray-500 uppercase tracking-[0.3em] group-focus-within:text-[#C5A059] transition-colors">Cloud Storage Link</label>
                                     <input name="cloudLink" value={formData.cloudLink} onChange={handleInputChange} type="text" className="w-full bg-[#0d0d0d] border border-white/10 px-4 py-4 text-white font-['Cinzel'] text-lg focus:border-[#C5A059] outline-none transition-all" placeholder="GDRIVE / DROPBOX / WETRANSFER" />
@@ -706,15 +335,58 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                                             <span className="block font-['Montserrat'] text-[9px] text-gray-500 uppercase tracking-widest mb-1">Rank (Exp)</span>
                                             <span className="font-['Cinzel'] text-white text-lg">{formData.experience} Cycles</span>
                                         </div>
-                                        <div>
-                                            <span className="block font-['Montserrat'] text-[9px] text-gray-500 uppercase tracking-widest mb-1">Demo File</span>
-                                            <span className="font-['Cinzel'] text-[#C5A059] text-sm break-all">{formData.demoFileName || "PENDING"}</span>
-                                        </div>
                                         <div className="md:col-span-2">
                                             <span className="block font-['Montserrat'] text-[9px] text-gray-500 uppercase tracking-widest mb-1">Cloud Link</span>
                                             <span className="font-['Cinzel'] text-[#C5A059] text-sm break-all">{formData.cloudLink || "PENDING"}</span>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                        )}
+                        {step === 5 && registrationSuccess && (
+                            <div className="space-y-6 sm:space-y-8 py-6 sm:py-10 animate-fade-in">
+                                <div className="text-center">
+                                    <div className="w-24 h-24 sm:w-28 sm:h-28 border-2 border-green-500 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 shadow-[0_0_30px_rgba(34,197,94,0.4)] animate-pulse">
+                                        <CheckCircle className="text-green-400" size={48} />
+                                    </div>
+                                    <h3 className="font-['Cinzel'] text-2xl sm:text-3xl md:text-4xl text-white mb-3 tracking-[0.1em]">
+                                        REGISTRATION COMPLETE
+                                    </h3>
+                                    <div className="h-px w-24 bg-[#C5A059]/50 mx-auto my-4" />
+                                    <p className="font-['Montserrat'] text-xs sm:text-sm text-green-300 uppercase tracking-[0.3em] mb-2">
+                                        You have been enlisted
+                                    </p>
+                                    <p className="font-['Montserrat'] text-xs sm:text-sm text-gray-400 max-w-md mx-auto leading-relaxed mt-4">
+                                        A confirmation email has been sent to <span className="text-[#C5A059]">{formData.email}</span>.
+                                        Please check your inbox (and spam folder) for further details.
+                                    </p>
+                                </div>
+
+                                <div className="bg-[#0d0d0d] p-6 sm:p-8 border border-green-500/20 space-y-4 relative overflow-hidden rounded">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 blur-[40px] rounded-full" />
+                                    <div className="grid grid-cols-2 gap-4 sm:gap-6 relative z-10">
+                                        <div>
+                                            <span className="block font-['Montserrat'] text-[9px] text-gray-500 uppercase tracking-widest mb-1">Combatant</span>
+                                            <span className="font-['Cinzel'] text-white text-base sm:text-lg">{formData.fullName}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block font-['Montserrat'] text-[9px] text-gray-500 uppercase tracking-widest mb-1">Email</span>
+                                            <span className="font-['Cinzel'] text-[#C5A059] text-xs sm:text-sm break-all">{formData.email}</span>
+                                        </div>
+                                        <div className="col-span-2 border-t border-white/5 pt-4">
+                                            <span className="block font-['Montserrat'] text-[9px] text-gray-500 uppercase tracking-widest mb-1">Event</span>
+                                            <span className="font-['Cinzel'] text-[#C5A059] text-sm sm:text-base">{eventDisplayName}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-center mt-6 sm:mt-8">
+                                    <button
+                                        onClick={() => navigateTo('home')}
+                                        className="uppercase tracking-[0.3em] text-[9px] sm:text-[10px] font-['Montserrat'] flex items-center justify-center gap-2 transition-all px-8 sm:px-12 py-3 sm:py-4 bg-[#C5A059] text-black shadow-[0_0_12px_rgba(197,160,89,0.35)] hover:bg-[#E5C580]"
+                                    >
+                                        <CheckCircle size={14} /> RETURN HOME
+                                    </button>
                                 </div>
                             </div>
                         )}
@@ -726,11 +398,13 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                         </div>
                     )}
 
+                    {!registrationSuccess && (
                     <div className="flex flex-row justify-between items-center gap-2 sm:gap-4 mt-8 sm:mt-14 pt-6 sm:pt-10 border-t border-white/5">
                         {step > 1 ? (
                             <button
                                 onClick={handleBack}
-                                className="uppercase tracking-[0.3em] text-[9px] sm:text-[10px] font-['Montserrat'] flex items-center justify-center gap-1 sm:gap-2 transition-all hover:translate-x-[-4px] px-4 sm:px-6 py-3 sm:py-4 w-[48%] sm:w-auto sm:min-w-[180px] bg-[#C5A059] text-black shadow-[0_0_12px_rgba(197,160,89,0.35)] hover:bg-[#E5C580]"
+                                disabled={isSubmitting}
+                                className="uppercase tracking-[0.3em] text-[9px] sm:text-[10px] font-['Montserrat'] flex items-center justify-center gap-1 sm:gap-2 transition-all hover:translate-x-[-4px] px-4 sm:px-6 py-3 sm:py-4 w-[48%] sm:w-auto sm:min-w-[180px] bg-[#C5A059] text-black shadow-[0_0_12px_rgba(197,160,89,0.35)] hover:bg-[#E5C580] disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <ChevronLeft size={14} /> BACK
                             </button>
@@ -738,11 +412,13 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
 
                         <button
                             onClick={step < 4 ? handleNext : handleSubmit}
-                            className="uppercase tracking-[0.3em] text-[9px] sm:text-[10px] font-['Montserrat'] flex items-center justify-center gap-1 sm:gap-2 transition-all hover:translate-x-[4px] px-4 sm:px-6 py-3 sm:py-4 w-[48%] sm:w-auto sm:min-w-[180px] bg-[#C5A059] text-black shadow-[0_0_12px_rgba(197,160,89,0.35)] hover:bg-[#E5C580]"
+                            disabled={isSubmitting}
+                            className="uppercase tracking-[0.3em] text-[9px] sm:text-[10px] font-['Montserrat'] flex items-center justify-center gap-1 sm:gap-2 transition-all hover:translate-x-[4px] px-4 sm:px-6 py-3 sm:py-4 w-[48%] sm:w-auto sm:min-w-[180px] bg-[#C5A059] text-black shadow-[0_0_12px_rgba(197,160,89,0.35)] hover:bg-[#E5C580] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {step === 4 ? 'SUBMIT' : 'NEXT'}
+                            {isSubmitting ? 'SUBMITTING...' : step === 4 ? 'SUBMIT' : 'NEXT'}
                         </button>
                     </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -84,14 +84,6 @@ const buildApiRoot = (apiBase) => {
     return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
 };
 const isVideoUrl = (value = '') => /\.(mp4|webm|mov)(\?|#|$)/i.test(String(value).trim());
-const formatBytes = (value) => {
-    const bytes = Number(value) || 0;
-    if (!bytes) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    const size = bytes / Math.pow(1024, index);
-    return `${size.toFixed(size < 10 ? 1 : 0)} ${units[index]}`;
-};
 
 const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
     const [activeTab, setActiveTab] = useState('home');
@@ -1147,26 +1139,16 @@ const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
                                                 <p><span className="text-gray-500">Experience:</span> {row.experience || '-'}</p>
                                                 <p className="md:col-span-2"><span className="text-gray-500">Instagram:</span> {row.instagram || '-'}</p>
                                                 <p className="md:col-span-2"><span className="text-gray-500">SoundCloud/Mixcloud:</span> {row.soundCloud || '-'}</p>
-                                                <div className="md:col-span-2 space-y-2">
-                                                    <p>
-                                                        <span className="text-gray-500">Demo Upload:</span>{' '}
-                                                        {row.demoFileUrl ? (
-                                                            <a className="text-[#C5A059] hover:underline" href={row.demoFileUrl} target="_blank" rel="noreferrer">
-                                                                {row.demoFile || 'Download'}
-                                                            </a>
-                                                        ) : (
-                                                            '-'
-                                                        )}
-                                                        {row.demoFileSize ? ` • ${formatBytes(row.demoFileSize)}` : ''}
-                                                    </p>
-                                                    {row.demoFileUrl && row.demoFileMime?.startsWith('video/') && (
-                                                        <video className="w-full max-w-[520px] rounded-md border border-white/10" src={row.demoFileUrl} controls />
+                                                <p className="md:col-span-2">
+                                                    <span className="text-gray-500">Cloud Link:</span>{' '}
+                                                    {row.cloudLink ? (
+                                                        <a className="text-[#C5A059] hover:underline" href={row.cloudLink} target="_blank" rel="noreferrer">
+                                                            {row.cloudLink}
+                                                        </a>
+                                                    ) : (
+                                                        '-'
                                                     )}
-                                                    {row.demoFileUrl && row.demoFileMime?.startsWith('audio/') && (
-                                                        <audio className="w-full max-w-[520px]" src={row.demoFileUrl} controls />
-                                                    )}
-                                                </div>
-                                                <p className="md:col-span-2"><span className="text-gray-500">Cloud Link:</span> {row.cloudLink || '-'}</p>
+                                                </p>
                                                 <p className="md:col-span-2"><span className="text-gray-500">Event:</span> {row.eventTitle || '-'} {row.eventDate ? `• ${row.eventDate}` : ''} {row.eventLocation ? `• ${row.eventLocation}` : ''}</p>
                                             </div>
                                             <div className="md:hidden pt-2">
