@@ -193,14 +193,14 @@ const SEED_GALLERY = [
 
 const app = express();
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const FALLBACK_PROD_ORIGINS = [
+const PROD_ORIGINS = [
   'https://mixmasters.club',
   'https://www.mixmasters.club',
 ];
 const allowedOrigins = [
   CORS_ORIGIN,
   ...CORS_ORIGIN_LIST,
-  ...(IS_PRODUCTION ? FALLBACK_PROD_ORIGINS : []),
+  ...PROD_ORIGINS, // Always include production origins
 ].filter(Boolean);
 const normalizeOrigin = (origin) => {
   if (!origin) return '';
@@ -232,14 +232,34 @@ const isAllowedOrigin = (origin) => {
   return allowedMatch || isMixMastersOrigin(origin);
 };
 
+// Handle preflight OPTIONS for all routes before any other middleware
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  if (!origin || isAllowedOrigin(origin) || isDevTunnelOrigin(origin) || (!IS_PRODUCTION && (origin.includes('localhost') || origin.includes('127.0.0.1')))) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    return res.status(204).end();
+  }
+  return res.status(403).end();
+});
+
 app.use(
   cors({
     origin: (incomingOrigin, callback) => {
-      // Allow all in development/non-production, or if direct server-to-server (no origin), or localhost
-      if (!IS_PRODUCTION || !incomingOrigin || incomingOrigin.includes('localhost') || incomingOrigin.includes('127.0.0.1')) {
+      // Allow server-to-server (no origin header)
+      if (!incomingOrigin) {
         return callback(null, true);
       }
 
+      // Allow localhost in development
+      if (!IS_PRODUCTION && (incomingOrigin.includes('localhost') || incomingOrigin.includes('127.0.0.1'))) {
+        return callback(null, true);
+      }
+
+      // Allow listed origins and mixmasters domains
       if (isAllowedOrigin(incomingOrigin) || isDevTunnelOrigin(incomingOrigin)) {
         return callback(null, true);
       }
