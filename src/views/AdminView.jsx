@@ -165,13 +165,6 @@ const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
         setSponsors(withLocalId(Array.isArray(content?.sponsors) ? content.sponsors : []));
         setGallery(withLocalId(Array.isArray(content?.gallery) ? content.gallery : []));
         setFaq(withLocalId(Array.isArray(content?.faq) ? content.faq : []));
-        setFormats(
-            withLocalId(
-                Array.isArray(content?.formats)
-                    ? content.formats.map((item) => ({ title: item.title || '', desc: item.desc || '' }))
-                    : []
-            )
-        );
         const backendResults = content?.results && typeof content.results === 'object'
             ? content.results
             : { heading: '', subtitle: '', items: [] };
@@ -198,14 +191,16 @@ const AdminView = ({ onExit, apiBase, adminToken, onContentSaved }) => {
                     cache: 'no-store',
                 });
                 if (!response.ok) {
+                    console.error(`Content fetch failed: ${response.status} ${response.statusText}`);
                     throw new Error('Unable to load content');
                 }
                 const payload = await response.json();
                 if (!cancelled) {
                     hydrateFromBackend(payload);
                 }
-            } catch {
+            } catch (err) {
                 if (!cancelled) {
+                    console.error('Failed to load backend content:', err);
                     setNotice('Failed to load backend content');
                 }
             } finally {

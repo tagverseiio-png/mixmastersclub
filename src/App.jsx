@@ -182,9 +182,11 @@ export default function App() {
         const payload = await response.json();
         if (!payload?.token) throw new Error('missing_token');
         if (cancelled) return;
+        console.log('Admin token recovered successfully');
         sessionStorage.setItem(ADMIN_TOKEN_KEY, payload.token);
         setAdminToken(payload.token);
-      } catch {
+      } catch (err) {
+        console.error('Failed to recover admin token:', err);
         if (cancelled) return;
         sessionStorage.removeItem(ADMIN_SESSION_KEY);
         sessionStorage.removeItem(ADMIN_TOKEN_KEY);
