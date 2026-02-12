@@ -3,7 +3,7 @@ import FadeIn from '../components/ui/FadeIn';
 import Button from '../components/ui/Button';
 import SectionHeader from '../components/ui/SectionHeader';
 import Logo from '../assets/Icon.svg';
-import HeroIMage from '../assets/hero.svg';
+import HeroIMage from '../assets/Hero.svg';
 
 const HeroVideoLayer = ({ sources, poster, isCustomHero }) => {
     const [heroVideoIndex, setHeroVideoIndex] = useState(0);
