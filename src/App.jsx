@@ -524,7 +524,8 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
+      {/* Footer — hidden on home page */}
+      {activePage !== 'home' && (
       <footer className="bg-[#050505] pt-20 md:pt-32 pb-10 md:pb-12 border-t border-white/5">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-12 mb-20">
@@ -598,6 +599,7 @@ export default function App() {
           </div>
         </div>
       </footer>
+      )}
     </div>
   );
 }
