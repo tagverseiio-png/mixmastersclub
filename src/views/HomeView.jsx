@@ -234,47 +234,6 @@ const HomeView = ({ navigateTo, mainEvent, judges = [], sponsors = [], settings 
             </div>
         </section>
 
-        {/* Council Teaser */}
-        <section className="py-20 md:py-32 bg-[#050505]">
-            <div className="container mx-auto px-4 sm:px-6 text-center">
-                <SectionHeader title="The Council" subtitle="Judged By Legends" center />
-                <div className="flex flex-wrap justify-center gap-8 md:gap-12 mb-16">
-                    {judges.slice(0, 3).map((judge) => {
-                        const judgeMediaUrl = normalizeUrl(judge.mediaUrl) || normalizeUrl(judge.image);
-                        const judgePoster = normalizeUrl(judge.image);
-                        const canRenderVideo = judge.mediaType === 'video' && Boolean(judgeMediaUrl);
-                        const canRenderImage = judge.mediaType !== 'video' && Boolean(judgeMediaUrl);
-
-                        return (
-                            <div key={judge.id} className="text-center group cursor-pointer" onClick={() => navigateTo('judges')}>
-                                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden mx-auto mb-6 border border-white/10 group-hover:border-[#C5A059] transition-all duration-500">
-                                    {canRenderVideo ? (
-                                        <video
-                                            autoPlay
-                                            loop
-                                            muted
-                                            playsInline
-                                            poster={judgePoster || undefined}
-                                            className="w-full h-full object-cover grayscale group-hover:scale-110 transition-transform duration-700"
-                                        >
-                                            <source src={judgeMediaUrl} type="video/mp4" />
-                                        </video>
-                                    ) : canRenderImage ? (
-                                        <img src={judgeMediaUrl} className="w-full h-full object-cover grayscale group-hover:scale-110 transition-transform duration-700" />
-                                    ) : (
-                                        <div className="w-full h-full bg-[#0b0b0b]" />
-                                    )}
-                                </div>
-                                <h4 className="font-['Cinzel'] text-xl text-white group-hover:text-[#C5A059] transition-colors">{judge.name}</h4>
-                                <p className="font-['Montserrat'] text-[9px] text-gray-500 uppercase tracking-widest mt-2">{judge.title}</p>
-                            </div>
-                        );
-                    })}
-                </div>
-                <Button variant="secondary" onClick={() => navigateTo('judges')}>Meet The Full Jury</Button>
-            </div>
-        </section>
-
         {/* Partners */}
         <section className="py-16 bg-[#020202] border-t border-white/5">
             <div className="container mx-auto px-4 sm:px-6 overflow-hidden">
