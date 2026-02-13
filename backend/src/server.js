@@ -551,13 +551,12 @@ async function sendEmail(options) {
 }
 
 function buildParticipantHtml(registration) {
-  const eventDisplayName = 'MixMasters Club – International Tamil DJ Battle';
   return `
     <!DOCTYPE html>
     <html>
     <head>
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Registration Confirmed - MixMasters Club</title>
+      <title>Application Received - MixMasters Club</title>
     </head>
     <body style="background-color: #050505; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #ffffff; margin: 0; padding: 0;">
       <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #0a0a0a; border: 1px solid #1a1a1a;">
@@ -569,24 +568,38 @@ function buildParticipantHtml(registration) {
         </tr>
         <tr>
           <td style="padding: 40px;">
-            <h2 style="font-size: 20px; color: #ffffff; margin-bottom: 20px;">Entry Confirmed, ${registration.fullName}.</h2>
-            <p style="color: #aaaaaa; line-height: 1.6; margin-bottom: 30px;">
-              Your application for the <strong>${eventDisplayName}</strong> has been received. Our council is currently reviewing your showcase.
+            <p style="color: #aaaaaa; line-height: 1.8; margin-bottom: 25px; font-size: 15px;">
+              Your Application for the MixMastersClub - International Tamil DJ Battle has been received.
             </p>
+
+            <p style="color: #C5A059; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 15px 0;">Here's what you need to know:</p>
             
             <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0f0f0f; border: 1px solid #1a1a1a; margin-bottom: 30px;">
               <tr>
                 <td style="padding: 20px;">
-                  <p style="color: #C5A059; font-size: 10px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 10px 0;">Battle Details</p>
-                  <p style="color: #ffffff; margin: 0; font-size: 14px;"><strong>Location:</strong> ${registration.eventLocation}</p>
-                  <p style="color: #ffffff; margin: 5px 0 0 0; font-size: 14px;"><strong>Date:</strong> ${registration.eventDate}</p>
+                  <ul style="color: #aaaaaa; line-height: 2; margin: 0; padding-left: 20px; font-size: 14px;">
+                    <li>Each DJ will have <strong style="color: #ffffff;">13 minutes</strong> on stage to showcase their best set.</li>
+                    <li>Extra points will be awarded for <strong style="color: #ffffff;">creativity</strong>, including tone play, word play, scratching, and other unique techniques.</li>
+                    <li>Judges will score based on <strong style="color: #ffffff;">Creativity</strong>, <strong style="color: #ffffff;">Impact</strong>, and <strong style="color: #ffffff;">Crowd Engagement</strong>.</li>
+                  </ul>
                 </td>
               </tr>
             </table>
 
-            <p style="color: #aaaaaa; line-height: 1.6; margin-bottom: 20px;">
-              Direct any further enquiries to our Instagram DM or reply to this email.
+            <p style="color: #C5A059; font-size: 16px; font-style: italic; text-align: center; margin-bottom: 30px; line-height: 1.6;">
+              Bring the fire, bring the vibe, and own the crowd!
             </p>
+
+            <p style="color: #aaaaaa; line-height: 1.8; margin-bottom: 20px; font-size: 14px;">
+              Our team will contact you once the judges have reviewed your uploaded video and shortlisted participants. The Champion DJ will be announced based on points, and the winner will get the spotlight to drop another set as the grand finale.
+            </p>
+
+            <p style="color: #aaaaaa; line-height: 1.8; margin-bottom: 30px; font-size: 14px;">
+              We look forward to seeing your skills!
+            </p>
+
+            <p style="color: #ffffff; font-size: 14px; margin: 0;">Best regards,</p>
+            <p style="color: #C5A059; font-size: 16px; font-weight: bold; margin: 5px 0 0 0;">MixMastersClub</p>
           </td>
         </tr>
         <tr>
@@ -632,7 +645,7 @@ async function sendRegistrationEmail(registration) {
     // 1. Send confirmation to participant
     await sendEmail({
       to: registration.email,
-      subject: `[MixMasters Club – International Tamil DJ Battle] Entry Confirmed - ${registration.eventTitle}`,
+      subject: `Application Received - MixMastersClub`,
       html: buildParticipantHtml(registration),
     });
 
@@ -640,7 +653,7 @@ async function sendRegistrationEmail(registration) {
     for (const adminEmail of ADMIN_EMAILS) {
       await sendEmail({
         to: adminEmail,
-        subject: `[NEW REGISTRATION] ${registration.fullName} - MixMasters Club – International Tamil DJ Battle`,
+        subject: `[NEW REGISTRATION] ${registration.fullName} - ${registration.eventTitle}`,
         html: buildAdminHtml(registration),
       });
     }
