@@ -213,8 +213,9 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                             alt="MMC Logo"
                             className="w-32 h-32 sm:w-48 sm:h-48 md:w-72 md:h-72 object-contain opacity-90"
                         />
-                        <h1 className="-mt-2 sm:-mt-4 font-['Cinzel'] text-[clamp(1.2rem,3.5vw,3rem)] text-white tracking-[0.05em] text-center max-w-[32rem]">
-                            {eventDisplayName}
+                        <h1 className="-mt-10 sm:-mt-16 md:-mt-20 font-['Cinzel'] text-[clamp(1.2rem,3.5vw,3rem)] text-white tracking-[0.05em] text-center max-w-[32rem]">
+                            <span className="block sm:inline">MixMasters Club</span>{' '}
+                            <span className="block sm:inline">International Tamil DJ Battle</span>
                         </h1>
                         <span className="font-['Cinzel'] text-[#C5A059] text-base sm:text-lg md:text-xl tracking-[0.3em] mt-1">2026</span>
                         <div className="h-px w-12 sm:w-16 bg-[#C5A059]/50 mt-2 sm:mt-4" />
@@ -305,6 +306,7 @@ const RegisterView = ({ preSelectedRole = 'artist', preSelectedEventId = '', eve
                                     <label className="text-[10px] font-['Montserrat'] text-gray-500 uppercase tracking-[0.3em] group-focus-within:text-[#C5A059] transition-colors">Cloud Storage Link</label>
                                     <input name="cloudLink" value={formData.cloudLink} onChange={handleInputChange} type="text" className="w-full bg-[#0d0d0d] border border-white/10 px-4 py-4 text-white font-['Cinzel'] text-lg focus:border-[#C5A059] outline-none transition-all" placeholder="GDRIVE / DROPBOX / WETRANSFER" />
                                     <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em]">Set link access to "Anyone with the link". Video limit: 10 minutes.</p>
+                                    <p className="text-[10px] text-gray-200 uppercase tracking-[0.2em]">It is Compulsory each DJ's upload a video not exceeding 10min of their best set to showcase their strongest skills - Mixing, scratching, transition and tamil fusion creativity.</p>
                                 </div>
                             </div>
                         )}

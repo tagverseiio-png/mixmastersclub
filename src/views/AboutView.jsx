@@ -20,11 +20,14 @@ const AboutView = ({ settings = {} }) => {
             <div className="grid md:grid-cols-2 gap-12 md:gap-24 items-center">
                 <div className="space-y-10">
                     <p className="font-['Cormorant_Garamond'] text-2xl md:text-3xl text-gray-300 italic leading-relaxed font-light border-l border-[#C5A059] pl-6 md:pl-8">
-                        "Mix Masters 2026 is a first-of-its-kind international Tamil DJ showdown, making its debut in May 2026 at Hard Rock Cafe, Singapore."
+                        "Welcome to MixMasters Club International Tamil DJ Battle — a stage where culture, creativity, and competition collide."
                     </p>
                     <div className="font-['Montserrat'] text-gray-500 text-xs leading-loose tracking-wide md:tracking-widest space-y-8 pl-6 md:pl-8 text-justify">
-                        <p>This is not just another DJ battle. <span className="text-[#C5A059]">This is a global stage.</span> For the first time, DJs from across the world will compete under one roof—representing Canada, the United States, Europe, Australia, India, Malaysia, Sri Lanka, and beyond.</p>
-                        <p>MixMasters 2026 is built to spotlight skill, originality, crowd control, and musical identity. Whether it’s technical mastery, seamless transitions, or the ability to move a room, this competition is about discovering DJs who stand out—not just locally, but internationally.</p>
+                        <p>Founded and powered by Double B, this battle is more than an event; it’s a global movement celebrating the artistry of DJing and the pride of Tamil identity.</p>
+                        <p>Our mission is to spotlight DJs who bring more than just beats—they bring stories, energy, and innovation. Every round is designed to test skill, showcase originality, and ignite the crowd. From technical mastery to musical storytelling, this battle raises the bar for what it means to be a DJ in today’s world.</p>
+                        <p>At the heart of MixMasters Club is unity through sound. We bring together underground talent and established names from across the globe, creating a platform where tradition meets modernity, and local pride meets international prestige.</p>
+                        <p>We are not just hosting a competition—we are building a community. A community that honors the craft, respects the culture, and amplifies voices from Tamil heritage onto the world stage.</p>
+                        <p className="text-gray-300 font-semibold tracking-widest">This is where DJs become legends. This is MixMasters Club International Tamil DJ Battle.</p>
                     </div>
                 </div>
                 <div className="relative h-[360px] sm:h-[500px] md:h-[600px] bg-[#0a0a0a] group overflow-hidden">

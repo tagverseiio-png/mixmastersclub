@@ -111,7 +111,7 @@ const EventDetailView = ({ event, onBack, navigateTo }) => {
 
                     <div className="prose prose-invert max-w-none">
                         <p className="font-['Montserrat'] text-gray-500 text-xs leading-loose tracking-wide text-justify">
-                            Join us for an unforgettable night of sonic mastery. This event brings together the finest talent from across the region to compete specifically in the Open Format category. Expect high-energy sets, technical scratching, and seamless transitions as DJs battle for a spot in the Grand Finale.
+                            Get ready for an unforgettable night as the region’s finest DJs go head-to-head in the Tamil Fusion category. Expect electrifying sets packed with technical scratching, seamless transitions, and high-energy performances that will keep the crowd moving all night. Only one will rise to claim the Crown—who will it be?
                         </p>
                     </div>
                 </div>
