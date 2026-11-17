@@ -64,11 +64,13 @@ Supported `:resource` values:
 
 ## Storage
 
-- Content metadata: MongoDB (`content` collection, single document model)
+- Content metadata: Firebase Realtime Database (`content/site_content_v1`, single document)
+- Registrations: Firebase Realtime Database (`registrations/<id>`)
+- Auth: `FIREBASE_DB_SECRET` query param (`?auth=`) on every REST call
 - No JSON/file fallback for content (real mode only)
 - Uploads: `backend/uploads/`
 - Uploaded files are served from `/uploads/<filename>`
-- Media binaries are never stored in MongoDB (saves Atlas 500MB quota)
+- Media binaries are never stored in Firebase
 - Upload type support: `mp4`, `webm`, `mov`, `jpg`, `png`, `webp`, `avif`
 - Upload size limit: `80MB`
 

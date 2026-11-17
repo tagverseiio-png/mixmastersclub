@@ -9,7 +9,6 @@ import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import crypto from 'crypto';
-import { MongoClient } from 'mongodb';
 import axios from 'axios';
 
 dotenv.config();
@@ -24,8 +23,10 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-before-production';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 const CORS_ORIGIN_LIST = (process.env.CORS_ORIGIN_LIST || '').split(',').map((o) => o.trim()).filter(Boolean);
-const MONGO_URI = process.env.MONGO_URI || '';
-const MONGO_DB_NAME = process.env.MONGO_DB_NAME || 'mix_masters';
+const FIREBASE_DB_URL = (process.env.FIREBASE_DB_URL || 'https://mixmasterclub-default-rtdb.asia-southeast1.firebasedatabase.app').replace(/\/+$/, '');
+const FIREBASE_DB_SECRET = process.env.FIREBASE_DB_SECRET || '';
+const CONTENT_PATH = 'content/site_content_v1';
+const REGISTRATIONS_PATH = 'registrations';
 
 const MAIL_SERVICE_URL = process.env.MAIL_SERVICE_URL || 'https://mailservice-tau.vercel.app/api/email/send';
 const MAIL_SERVICE_API_KEY = process.env.MAIL_SERVICE_API_KEY || '';
@@ -292,14 +293,78 @@ const upload = multer({
   },
 });
 
-const client = new MongoClient(MONGO_URI, {
-  maxPoolSize: 10,
-  minPoolSize: 1,
-  retryWrites: true,
-});
+// --- Firebase Realtime Database (REST) storage helpers --------------------
+function buildFirebaseUrl(pathname) {
+  const cleanPath = String(pathname || '').replace(/^\/+/, '');
+  const url = `${FIREBASE_DB_URL}/${cleanPath}.json`;
+  return FIREBASE_DB_SECRET ? `${url}?auth=${encodeURIComponent(FIREBASE_DB_SECRET)}` : url;
+}
 
-let contentCollection;
-let registrationsCollection;
+function toFirebaseError(method, pathname, error) {
+  const status = error.response?.status;
+  const body = error.response?.data;
+  const detail = (body && typeof body === 'object' && body.error)
+    || (typeof body === 'string' && body)
+    || error.message;
+  const hint = status === 401 || status === 403
+    ? ' (check FIREBASE_DB_SECRET in backend/.env)'
+    : '';
+  const wrapped = new Error(
+    `Firebase RTDB ${method} /${pathname} failed${status ? ` [${status}]` : ''}: ${detail}${hint}`
+  );
+  wrapped.status = status;
+  return wrapped;
+}
+
+async function firebaseGet(pathname) {
+  try {
+    const { data } = await axios.get(buildFirebaseUrl(pathname));
+    return data === undefined ? null : data;
+  } catch (error) {
+    throw toFirebaseError('GET', pathname, error);
+  }
+}
+
+async function firebasePut(pathname, value) {
+  try {
+    const { data } = await axios.put(buildFirebaseUrl(pathname), value === undefined ? null : value);
+    return data;
+  } catch (error) {
+    throw toFirebaseError('PUT', pathname, error);
+  }
+}
+
+async function firebasePatch(pathname, value) {
+  try {
+    const { data } = await axios.patch(buildFirebaseUrl(pathname), value === undefined ? null : value);
+    return data;
+  } catch (error) {
+    throw toFirebaseError('PATCH', pathname, error);
+  }
+}
+
+async function firebaseDelete(pathname) {
+  try {
+    await axios.delete(buildFirebaseUrl(pathname));
+  } catch (error) {
+    throw toFirebaseError('DELETE', pathname, error);
+  }
+}
+
+// Firebase stores arrays as objects with numeric keys ("0", "1", ...) and may
+// hand them back that way, so normalise every list-shaped value before use.
+function normalizeList(value) {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (keys.length === 0) return [];
+    if (keys.every((key) => /^\d+$/.test(key))) {
+      return keys.sort((a, b) => Number(a) - Number(b)).map((key) => value[key]);
+    }
+    return Object.values(value);
+  }
+  return [];
+}
 
 function sanitizeContent(payload) {
   return {
@@ -317,16 +382,16 @@ function sanitizeContent(payload) {
         visionBody: payload.settings.visionBody || '',
       }
       : { ...DEFAULT_CONTENT.settings },
-    events: Array.isArray(payload.events) ? payload.events : [],
-    judges: Array.isArray(payload.judges) ? payload.judges : [],
-    sponsors: Array.isArray(payload.sponsors) ? payload.sponsors : [],
-    gallery: Array.isArray(payload.gallery) ? payload.gallery : [],
-    faq: Array.isArray(payload.faq) ? payload.faq : [],
+    events: normalizeList(payload.events),
+    judges: normalizeList(payload.judges),
+    sponsors: normalizeList(payload.sponsors),
+    gallery: normalizeList(payload.gallery),
+    faq: normalizeList(payload.faq),
     results: payload.results && typeof payload.results === 'object'
       ? {
         heading: payload.results.heading || '',
         subtitle: payload.results.subtitle || '',
-        items: Array.isArray(payload.results.items) ? payload.results.items : [],
+        items: normalizeList(payload.results.items),
       }
       : { ...DEFAULT_CONTENT.results },
   };
@@ -337,74 +402,68 @@ async function ensureLocalStorageDir() {
 }
 
 async function ensureContentDoc() {
-  const existing = await contentCollection.findOne({ _id: CONTENT_DOC_ID });
-  if (existing) return false; // already exists, no seeding needed
+  const existing = await firebaseGet(CONTENT_PATH);
+  if (existing && typeof existing === 'object') return false; // already exists, no seeding needed
 
-  await contentCollection.insertOne({
-    _id: CONTENT_DOC_ID,
+  await firebasePut(CONTENT_PATH, {
     ...sanitizeContent(DEFAULT_CONTENT),
     _seeded: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   });
   return true; // freshly created, seeding is needed
+}
+
+async function patchContent(patch) {
+  // Firebase PATCH merges at the top level and replaces provided keys wholesale,
+  // which is what we want for list fields (avoids stale numeric-key leftovers).
+  await firebasePatch(CONTENT_PATH, {
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  });
 }
 
 async function ensureFaqSeed(isNewDoc) {
   // Only seed FAQ on first-time setup (fresh document)
   if (!isNewDoc) return;
 
-  await contentCollection.updateOne(
-    { _id: CONTENT_DOC_ID },
-    {
-      $set: {
-        faq: FAQ_SEED,
-        updatedAt: new Date(),
-      },
-    }
-  );
+  await patchContent({ faq: FAQ_SEED });
 }
 
 async function ensureSeedData(isNewDoc) {
   // Only seed sample data on first-time setup (fresh document)
   if (!isNewDoc) return;
 
-  await contentCollection.updateOne(
-    { _id: CONTENT_DOC_ID },
-    {
-      $set: {
-        events: SEED_EVENTS,
-        judges: SEED_JUDGES,
-        gallery: SEED_GALLERY,
-        updatedAt: new Date(),
-      },
-    }
-  );
+  await patchContent({
+    events: SEED_EVENTS,
+    judges: SEED_JUDGES,
+    gallery: SEED_GALLERY,
+  });
 }
 
 async function readContent() {
-  const doc = await contentCollection.findOne({ _id: CONTENT_DOC_ID });
-  if (!doc) {
-    return { ...DEFAULT_CONTENT };
+  const doc = await firebaseGet(CONTENT_PATH);
+  if (!doc || typeof doc !== 'object') {
+    return sanitizeContent(DEFAULT_CONTENT);
   }
   return sanitizeContent(doc);
 }
 
 async function writeContent(data) {
   const safeData = sanitizeContent(data);
-  await contentCollection.updateOne(
-    { _id: CONTENT_DOC_ID },
-    {
-      $set: {
-        ...safeData,
-        updatedAt: new Date(),
-      },
-      $setOnInsert: {
-        createdAt: new Date(),
-      },
-    },
-    { upsert: true }
-  );
+  const existing = await firebaseGet(CONTENT_PATH);
+  await firebasePut(CONTENT_PATH, {
+    ...safeData,
+    _seeded: Boolean(existing && existing._seeded),
+    createdAt: (existing && existing.createdAt) || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+// Registrations live under /registrations/<id> as a map of id -> registration.
+async function listRegistrations() {
+  const data = await firebaseGet(REGISTRATIONS_PATH);
+  return normalizeList(data).filter((item) => item && typeof item === 'object');
 }
 
 // Helper function to extract file paths from URLs that belong to our server
@@ -655,7 +714,8 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     service: 'mix_masters_backend',
     storage: {
-      db: 'mongodb',
+      db: 'firebase-rtdb',
+      databaseUrl: FIREBASE_DB_URL,
       media: 'local-filesystem',
       uploadsDir: '/uploads',
     },
@@ -699,10 +759,12 @@ app.post('/api/public/registrations', async (req, res) => {
   }
 
   // Prevent duplicate registration (same email + same event)
-  const existing = await registrationsCollection.findOne({
-    email: payload.email.toLowerCase(),
-    eventId: payload.eventId,
-  });
+  const registrations = await listRegistrations();
+  const existing = registrations.find(
+    (item) =>
+      String(item.email || '').toLowerCase() === payload.email.toLowerCase()
+      && String(item.eventId || '') === String(payload.eventId)
+  );
   if (existing) {
     return res.status(409).json({
       message: 'You have already registered for this event.',
@@ -721,7 +783,7 @@ app.post('/api/public/registrations', async (req, res) => {
     createdAt: new Date().toISOString(),
   };
 
-  await registrationsCollection.insertOne(registration);
+  await firebasePut(`${REGISTRATIONS_PATH}/${registration.id}`, registration);
   const mail = await sendRegistrationEmail(registration);
   return res.status(201).json({
     message: 'Registration submitted',
@@ -810,29 +872,28 @@ app.post('/api/upload', authRequired, upload.single('media'), (req, res) => {
 });
 
 app.get('/api/registrations', authRequired, async (_req, res) => {
-  const list = await registrationsCollection
-    .find({})
-    .sort({ createdAt: -1 })
-    .toArray();
+  const list = await listRegistrations();
+  list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   return res.json(list);
 });
 
 app.delete('/api/registrations/:id', authRequired, async (req, res) => {
+  const registrationId = String(req.params.id);
+  const registrationPath = `${REGISTRATIONS_PATH}/${registrationId}`;
+
   // First, find the registration to get the media URL
-  const registration = await registrationsCollection.findOne({ id: String(req.params.id) });
-  
-  if (!registration) {
+  const registration = await firebaseGet(registrationPath);
+
+  if (!registration || typeof registration !== 'object') {
     return res.status(404).json({ message: 'Registration not found' });
   }
-  
+
   // Delete the registration from database
-  const result = await registrationsCollection.deleteOne({ id: String(req.params.id) });
-  
-  if (result.deletedCount) {
-    // Delete associated media files from server storage
-    await deleteAssociatedMedia(registration);
-  }
-  
+  await firebaseDelete(registrationPath);
+
+  // Delete associated media files from server storage
+  await deleteAssociatedMedia(registration);
+
   return res.status(204).send();
 });
 
@@ -927,22 +988,28 @@ app.use((err, _req, res, next) => {
   return res.status(500).json({ message: 'Internal server error' });
 });
 
-if (!MONGO_URI) {
-  throw new Error('MONGO_URI is required. Set it in backend/.env');
+await ensureLocalStorageDir();
+
+// Verify the database is reachable (and authenticated) before serving traffic.
+try {
+  await firebaseGet(CONTENT_PATH);
+} catch (error) {
+  if (!FIREBASE_DB_SECRET && (error.status === 401 || error.status === 403)) {
+    throw new Error(
+      'Firebase Realtime Database denied access. Set FIREBASE_DB_SECRET in backend/.env '
+      + '(Firebase Console -> Project settings -> Service accounts -> Database secrets).'
+    );
+  }
+  throw error;
 }
 
-await ensureLocalStorageDir();
-await client.connect();
-const db = client.db(MONGO_DB_NAME);
-contentCollection = db.collection('content');
-registrationsCollection = db.collection('registrations');
 const isNewDoc = await ensureContentDoc();
 await ensureFaqSeed(isNewDoc);
 await ensureSeedData(isNewDoc);
 
 const server = app.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
-  console.log(`MongoDB connected: ${MONGO_DB_NAME}`);
+  console.log(`Firebase RTDB connected: ${FIREBASE_DB_URL}`);
 });
 
 // Set server timeout to 5 minutes for large file uploads
